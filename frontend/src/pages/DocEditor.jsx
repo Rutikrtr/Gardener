@@ -14,21 +14,24 @@ export default function DocEditor() {
   const nav = useNavigate();
   const isBill = kind === 'bill';
   const base = isBill ? '/bills' : '/quotations';
-  const [items] = useApi('/items', []);
+  const [itemsRaw] = useApi('/items');
+  const items = itemsRaw || [];
   // For bills: what is still left to bill per item from the work order (this bill excluded)
-  const [billable] = useApi(isBill ? `/projects/${pid}/billable${id ? '?excludeBill=' + id : ''}` : null, {});
-  const [approved] = useApi(isBill ? `/quotations?project=${pid}&status=approved` : null, []);
+  const [billableRaw] = useApi(isBill ? `/projects/${pid}/billable${id ? '?excludeBill=' + id : ''}` : null);
+  const [approvedRaw] = useApi(isBill ? `/quotations?project=${pid}&status=approved` : null);
+  const billable = billableRaw || {}, approved = approvedRaw || [];
+  const [docReady, setDocReady] = useState(false);
   const [doc, setDoc] = useState({ date: isoDate(), title: '', gstEnabled: true, gstType: 'cgst_sgst', gstPercent: 18, tdsPercent: 0, lines: [blank()], terms: '', notes: '' });
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (id) api(`${base}/${id}`).then(d => setDoc({ ...d, date: isoDate(d.date), project: d.project?._id, lines: d.lines.map(l => ({ ...l, gstPercent: lineGst(l, d) })) }));
+    if (id) api(`${base}/${id}`).then(d => { setDoc({ ...d, date: isoDate(d.date), project: d.project?._id, lines: d.lines.map(l => ({ ...l, gstPercent: lineGst(l, d) })) }); setDocReady(true); });
     // New document: GST / TDS defaults & terms from Settings
     else api('/auth/settings').then(s => setDoc(d => ({
       ...d, gstEnabled: s.gstEnabled ?? true, gstType: s.gstType || 'cgst_sgst', gstPercent: s.gstPercent ?? 18,
       tdsPercent: isBill ? s.tdsPercent ?? 0 : 0, terms: isBill ? '' : s.terms || '',
-    })));
+    }))).finally(() => setDocReady(true));
   }, [id]);
 
   const wo = approved[0];
@@ -91,6 +94,10 @@ export default function DocEditor() {
       nav('/projects/' + pid, { state: { tab: isBill ? 'bills' : 'quotes' } });
     } catch (e) { setErr(e.message); setSaving(false); }
   };
+
+  // Wait until everything is loaded so values don't jump around on screen
+  const ready = docReady && itemsRaw && (!isBill || (billableRaw && approvedRaw));
+  if (!ready) return <EditorSkeleton title={`${id ? 'Edit' : 'New'} ${isBill ? 'stage bill' : 'quotation'}`} back={() => nav('/projects/' + pid)} />;
 
   const extraTotal = doc.lines.filter(l => l.extra).reduce((s, l) => s + (+l.qty || 0) * (+l.rate || 0), 0);
 
@@ -189,4 +196,14 @@ export default function DocEditor() {
 
 function guessSection(cat) {
   return { Soil: SECTIONS[0], Manure: SECTIONS[1], Tree: SECTIONS[2], Plant: SECTIONS[3], Lawn: SECTIONS[4], Irrigation: SECTIONS[5], Service: SECTIONS[6] }[cat] || '';
+}
+
+function EditorSkeleton({ title, back }) {
+  return (
+    <>
+      <div className="head"><div className="row"><button className="icon" onClick={back}><ArrowLeft size={18} /></button><div><h1>{title}</h1><small>Loading…</small></div></div></div>
+      <div className="card" style={{ marginBottom: 16 }}><div className="row" style={{ gap: 14 }}>{[2, 1, 1, 1.3].map((f, i) => <div key={i} className="skel" style={{ flex: f, height: 58 }} />)}</div></div>
+      <div className="card" style={{ display: 'grid', gap: 10 }}>{[0, 1, 2, 3].map(i => <div key={i} className="skel" style={{ height: 38 }} />)}</div>
+    </>
+  );
 }

@@ -42,7 +42,7 @@ export default function ProjectDetail() {
   };
   const reloadAll = () => { [reloadP, reloadSum, reloadQ, reloadB, reloadPay, reloadU, reloadL, reloadD].forEach(f => f()); setCostsVersion(v => v + 1); };
 
-  if (!p) return <div className="empty">Loading…</div>;
+  if (!p || !sum) return <ProjectSkeleton />;
   const del = async (path, msg) => {
     if (!confirm(msg)) return false;
     await api(path, { method: 'DELETE' });
@@ -66,14 +66,6 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <div className="strip">
-        <div><small>Work order value</small><b>{wo ? inr(sum?.quoted) : '—'}</b></div>
-        <div><small>Billed</small><b>{inr(sum?.billed)}</b></div>
-        <div><small>Received</small><b className="pos">{inr(sum?.received)}</b></div>
-        <div><small>Due from customer</small><b className={sum?.outstanding > 0 ? 'neg' : ''}>{inr(sum?.outstanding)}</b></div>
-        <div className="dark"><small>Profit <Lock size={11} /></small><b>{inr(sum?.profit)} <span>{sum?.margin || 0}%</span></b></div>
-      </div>
-
       <div className="proj">
         <aside className="pnav">
           {NAV.map(g => (
@@ -86,7 +78,23 @@ export default function ProjectDetail() {
               ))}
             </div>
           ))}
+          <div className="pnav-foot">
+            <div className="pnav-label">Quick actions</div>
+            <Link className="qa" to={`/projects/${id}/quotation/new`}><FileText size={15} /> New quotation</Link>
+            <Link className="qa" to={`/projects/${id}/bill/new`}><Receipt size={15} /> New stage bill</Link>
+            <button className="qa" onClick={() => setTab('stock')}><Sprout size={15} /> Log usage</button>
+            <button className="qa" onClick={downloadExcel} disabled={exporting}><FileSpreadsheet size={15} /> {exporting ? 'Preparing…' : 'Excel'}</button>
+          </div>
         </aside>
+
+        <div className="pmain">
+        <div className="strip">
+          <div><small>Work order value</small><b>{wo ? inr(sum?.quoted) : '—'}</b></div>
+          <div><small>Billed</small><b>{inr(sum?.billed)}</b></div>
+          <div><small>Received</small><b className="pos">{inr(sum?.received)}</b></div>
+          <div><small>Due from customer</small><b className={sum?.outstanding > 0 ? 'neg' : ''}>{inr(sum?.outstanding)}</b></div>
+          <div className="dark"><small>Profit <Lock size={11} /></small><b>{inr(sum?.profit)} <span>{sum?.margin || 0}%</span></b></div>
+        </div>
 
         <div className="pbody" key={tab}>
           {tab === 'overview' && <Overview {...ctx} go={t => (t === 'edit' ? setModal('project') : setTab(t))} />}
@@ -98,6 +106,7 @@ export default function ProjectDetail() {
           {tab === 'labour' && <LabourSection {...ctx} />}
           {tab === 'expenses' && <Expenses {...ctx} />}
           {tab === 'pnl' && <ProfitLoss {...ctx} />}
+        </div>
         </div>
       </div>
 
@@ -338,5 +347,18 @@ function Stock({ id, ledger, usage, daywise, reloadAll, del, go }) {
           await api('/usage', { method: 'POST', body: { ...v, project: id } }); reloadAll();
         }} />}
     </div>
+  );
+}
+
+function ProjectSkeleton() {
+  return (
+    <>
+      <div className="head"><div><div className="skel" style={{ width: 260, height: 28 }} /><div className="skel" style={{ width: 180, height: 14, marginTop: 8 }} /></div></div>
+      <div className="skel" style={{ height: 64, marginBottom: 18, borderRadius: 16 }} />
+      <div className="proj">
+        <div className="skel" style={{ height: 420, borderRadius: 16 }} />
+        <div className="grid">{[160, 90, 220].map((h, i) => <div key={i} className="skel" style={{ height: h, borderRadius: 16 }} />)}</div>
+      </div>
+    </>
   );
 }

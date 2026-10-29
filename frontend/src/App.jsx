@@ -5,7 +5,7 @@ import Suppliers from './pages/Suppliers';
 import Workers from './pages/Workers';
 import Reports from './pages/Reports';
 import { LayoutDashboard, FolderKanban, Receipt, Truck, HardHat, FileSpreadsheet, Sprout, Users, Building2, Settings as SettingsIcon, LogOut, Leaf, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
-import { getUser, logout } from './api';
+import { api, getUser, logout } from './api';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
@@ -31,14 +31,31 @@ function Shell({ nav, children }) {
   // Sidebar starts closed (icons only); the choice is remembered on this device
   const [open, setOpen] = useState(() => { try { return localStorage.getItem('sg_side') === 'open'; } catch { return false; } });
   const toggle = () => setOpen(o => { try { localStorage.setItem('sg_side', o ? 'closed' : 'open'); } catch {} return !o; });
+  // Company logo from Settings (cached so it doesn't flicker on every page load)
+  const [logo, setLogo] = useState(() => { try { return sessionStorage.getItem('sg_logo') || ''; } catch { return ''; } });
+  useEffect(() => {
+    if (user?.role !== 'user') return;
+    const load = () => api('/auth/settings').then(s => { setLogo(s.logo || ''); try { sessionStorage.setItem('sg_logo', s.logo || ''); } catch {} }).catch(() => {});
+    load();
+    window.addEventListener('sg-settings', load);
+    return () => window.removeEventListener('sg-settings', load);
+  }, []);
+  const mark = logo ? <img src={logo} alt="" /> : <Leaf size={18} />;
   return (
     <div className={'shell' + (open ? ' side-open' : ' side-closed')}>
       <aside className="side">
         <div className="brand">
-          <button className="logo side-toggle" onClick={toggle} title={open ? 'Close menu' : 'Open menu'} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}>
-            <span className="tg-leaf"><Leaf size={18} /></span><span className="tg-menu">{open ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</span>
-          </button>
-          <div className="side-text"><b>Smart Garden</b><small>{user?.role === 'superadmin' ? 'Admin console' : user?.name}</small></div>
+          {open ? (
+            <>
+              <span className={'logo' + (logo ? ' has-img' : '')}>{mark}</span>
+              <div className="side-text grow"><b>Smart Garden</b><small>{user?.role === 'superadmin' ? 'Admin console' : user?.name}</small></div>
+              <button className="side-collapse" onClick={toggle} title="Close menu" aria-label="Close menu" aria-expanded="true"><PanelLeftClose size={17} /></button>
+            </>
+          ) : (
+            <button className={'logo side-toggle' + (logo ? ' has-img' : '')} onClick={toggle} title="Open menu" aria-label="Open menu" aria-expanded="false">
+              <span className="tg-leaf">{mark}</span><span className="tg-menu"><PanelLeftOpen size={18} /></span>
+            </button>
+          )}
         </div>
         <nav>
           {nav.map(([to, label, Icon]) => (
@@ -51,7 +68,7 @@ function Shell({ nav, children }) {
           <button className="icon" title="Logout" onClick={logout}><LogOut size={16} /></button>
         </div>
       </aside>
-      <main className="main" key={loc.pathname}>{children}</main>
+      <main className="main"><div className="page" key={loc.pathname}>{children}</div></main>
       <Toasts />
     </div>
   );

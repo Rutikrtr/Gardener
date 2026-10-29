@@ -26,7 +26,7 @@ export default function Settings() {
   const set = (k, v) => setS(x => ({ ...x, [k]: v }));
   const save = async e => {
     e.preventDefault();
-    try { await api('/auth/settings', { method: 'PUT', body: s }); toast('Settings saved'); } catch (x) { toast(x.message, 'err'); }
+    try { await api('/auth/settings', { method: 'PUT', body: s }); toast('Settings saved'); window.dispatchEvent(new Event('sg-settings')); } catch (x) { toast(x.message, 'err'); }
   };
   const pickLogo = async e => {
     const f = e.target.files?.[0];
