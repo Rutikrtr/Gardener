@@ -402,3 +402,39 @@ button.small, .btn.small { padding: 6px 10px; font-size: 13px; }
 
 
 @media (max-height: 640px) { .side nav a, .pnav button { padding-top: 7px; padding-bottom: 7px; } .brand { padding-bottom: 14px; } .pnav-label { padding-top: 8px; } }
+
+/* ================= App-screen layout =================
+   The app is exactly one screen tall. The sidebar and each page's top bar never move;
+   only the page content scrolls. Project pages also keep their money strip, menu and
+   "internal only" note fixed, and scroll just the section content. */
+.shell { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.side { height: 100%; position: relative; align-self: stretch; }
+.main { height: 100%; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.page { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 32px 32px; scrollbar-gutter: stable; }
+.page > .head:first-child, .page > form > .head:first-child { position: sticky; top: 0; margin: 0 -32px 22px; padding: 18px 32px 14px; }
+
+/* project page: nothing scrolls except the section body */
+.page:has(> .proj) { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 0; }
+.page:has(> .proj) > .head:first-child { position: static; flex: none; margin-bottom: 18px; }
+.proj { flex: 1; min-height: 0; align-items: stretch; padding-bottom: 20px; }
+.pnav { position: static; height: auto; min-height: 0; max-height: none; }
+.pmain { display: flex; flex-direction: column; min-height: 0; }
+.pmain > .strip { flex: none; }
+.pbody { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 6px 24px 2px; margin-right: -6px; scrollbar-width: thin; scrollbar-gutter: stable; }
+/* the "Internal only" note stays at the top of cost sections */
+.pbody > .grid > .notice:first-child { position: sticky; top: 0; z-index: 5; margin: 0; background: #eef2ec; box-shadow: 0 -16px 0 var(--bg), 0 8px 12px var(--bg); }
+
+@media (max-width: 1180px) {
+  .proj { display: flex; flex-direction: column; gap: 14px; }
+  .pnav { flex: none; }
+  .pmain { flex: 1; }
+}
+/* phones: normal page scrolling feels better than nested scroll areas */
+@media (max-width: 760px) {
+  .shell, .main, .page, .page:has(> .proj), .proj, .pmain, .pbody { height: auto; overflow: visible; display: block; }
+  .shell { display: flex; }
+  .page { padding: 0 16px 24px; }
+  .page > .head:first-child, .page > form > .head:first-child { margin: 0 -16px 18px; padding: 12px 16px; }
+  .pbody { margin: 0; padding: 0; }
+  .pnav { margin-bottom: 14px; }
+}

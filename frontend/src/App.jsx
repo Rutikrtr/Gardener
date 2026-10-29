@@ -21,12 +21,16 @@ import { Toasts } from './pages/ui';
 function Shell({ nav, children }) {
   const user = getUser();
   const loc = useLocation();
-  // Show a divider under the sticky page header once the page is scrolled
+  // Show a divider under the page's top bar once its content is scrolled (the page area scrolls, not the window)
   useEffect(() => {
-    const on = () => document.querySelector('.main .head')?.classList.toggle('stuck', window.scrollY > 4);
+    const scroller = document.querySelector('.main .page');
+    const on = e => {
+      const top = e?.target?.scrollTop ?? Math.max(scroller?.scrollTop || 0, window.scrollY);
+      document.querySelector('.main .head')?.classList.toggle('stuck', top > 4);
+    };
     on();
-    window.addEventListener('scroll', on, { passive: true });
-    return () => window.removeEventListener('scroll', on);
+    document.addEventListener('scroll', on, { passive: true, capture: true });
+    return () => document.removeEventListener('scroll', on, { capture: true });
   }, [loc.pathname]);
   // Sidebar starts closed (icons only); the choice is remembered on this device
   const [open, setOpen] = useState(() => { try { return localStorage.getItem('sg_side') === 'open'; } catch { return false; } });
