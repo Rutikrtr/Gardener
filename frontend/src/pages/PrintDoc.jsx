@@ -1,7 +1,23 @@
 import { useParams } from 'react-router-dom';
-import { Printer } from 'lucide-react';
+import { Printer, Leaf } from 'lucide-react';
 import { useApi } from './ui';
 import { inr, dt, gstParts } from '../api';
+
+// Decorative leafy branch for the header / footer (pure SVG, prints in colour)
+function Foliage({ flip, className }) {
+  return (
+    <svg className={className} viewBox="0 0 260 120" style={flip ? { transform: 'scaleX(-1)' } : undefined} aria-hidden="true">
+      <path d="M10 110 C80 95 150 70 250 12" fill="none" stroke="#4f8a3a" strokeWidth="2.2" strokeLinecap="round" />
+      {[[40, 100, -30], [75, 90, -40], [110, 78, -35], [145, 64, -45], [180, 48, -40], [212, 32, -50]].map(([x, y, r], i) => (
+        <g key={i}>
+          <path d="M0 0 C10 -18 30 -20 42 -14 C30 -4 14 2 0 0Z" fill={i % 2 ? '#7bc950' : '#3f9b2e'} opacity=".9" transform={`translate(${x} ${y}) rotate(${r})`} />
+          <path d="M0 0 C10 18 30 20 42 14 C30 4 14 -2 0 0Z" fill={i % 2 ? '#3f9b2e' : '#9ad672'} opacity=".85" transform={`translate(${x + 6} ${y - 2}) rotate(${r + 70})`} />
+        </g>
+      ))}
+      <circle cx="246" cy="14" r="5" fill="#e8b64c" />
+    </svg>
+  );
+}
 
 export default function PrintDoc() {
   const { kind, id } = useParams();
@@ -10,7 +26,7 @@ export default function PrintDoc() {
   const [s] = useApi('/auth/settings');
   if (!d || !s) return <div className="empty">Loading…</div>;
   const project = d.project;
-  const COMPANY = { name: s.companyName, tagline: s.tagline, address: s.address, phone: s.phone, email: s.email, gstin: s.gstin };
+  const client = project?.client;
 
   // group lines by section, keeping order of first appearance
   const groups = [];
@@ -20,53 +36,90 @@ export default function PrintDoc() {
     g.lines.push(l);
   });
   let sr = 0;
-  const client = project?.client;
 
   return (
-    <div style={{ background: '#e9ede7', minHeight: '100vh', padding: '24px 0' }}>
-      <div className="no-print" style={{ maxWidth: 900, margin: '0 auto 12px', display: 'flex', justifyContent: 'flex-end' }}>
+    <div className="print-bg">
+      <div className="no-print print-bar">
         <button className="primary" onClick={() => window.print()}><Printer size={15} /> Print / Save PDF</button>
       </div>
-      <div className="print-page">
-        <div className="print-head">
+      <div className="print-page doc">
+        <header className="doc-head">
+          <Foliage className="doc-leaf" />
+          <div className="doc-brand">
+            <div className="doc-logo">{s.logo ? <img src={s.logo} alt="" /> : <Leaf size={34} />}</div>
+            <div>
+              <div className="doc-firm">{s.companyName}</div>
+              {s.tagline && <div className="doc-tag">{s.tagline}</div>}
+              <div className="doc-contact">
+                {s.address && <span>{s.address}</span>}
+                {(s.phone || s.email) && <span>{[s.phone, s.email].filter(Boolean).join('  ·  ')}</span>}
+                {s.gstin && <span>GSTIN: <b>{s.gstin}</b></span>}
+              </div>
+            </div>
+          </div>
+          <div className="doc-type">
+            <div className="doc-title">{isBill ? (d.gstEnabled ? 'TAX INVOICE' : 'INVOICE') : 'QUOTATION'}</div>
+            {isBill && <div className="doc-stage">Running bill · Stage {d.stage}</div>}
+            <table className="doc-meta"><tbody>
+              <tr><td>No.</td><td><b>{d.number}</b></td></tr>
+              <tr><td>Date</td><td><b>{dt(d.date)}</b></td></tr>
+            </tbody></table>
+          </div>
+        </header>
+
+        <section className="doc-parties">
           <div>
-            <h1 style={{ color: 'var(--green)' }}>{COMPANY.name}</h1>
-            <small style={{ fontStyle: 'italic' }}>{COMPANY.tagline}</small>
-            <small>{COMPANY.address}</small>
-            <small>{[COMPANY.phone, COMPANY.email].filter(Boolean).join(' · ')}</small>
-            {COMPANY.gstin && <small>GSTIN: <b>{COMPANY.gstin}</b></small>}
+            <div className="doc-label">{isBill ? 'Bill to' : 'Quotation for'}</div>
+            <b>{client?.name || '—'}</b>
+            {client?.company && <div>{client.company}</div>}
+            {client?.address && <div className="muted">{client.address}</div>}
+            {client?.gstin && <div className="muted">GSTIN: {client.gstin}</div>}
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <h1 style={{ fontSize: 22 }}>{isBill ? `RUNNING BILL – STAGE ${d.stage}` : 'QUOTATION'}</h1>
-            <small>No. <b>{d.number}</b></small>
-            <small>Date: <b>{dt(d.date)}</b></small>
+          <div>
+            <div className="doc-label">Project / site</div>
+            <b>{project?.name}</b>
+            {project?.site && <div className="muted">{project.site}</div>}
           </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 24 }}>
-          <div><small>To</small><b>{client?.name}</b>{client?.company && <div>{client.company}</div>}<small>{client?.address}</small>{client?.gstin && <small>GSTIN: {client.gstin}</small>}</div>
-          <div style={{ textAlign: 'right' }}><small>Project / Site</small><b>{project?.name}</b><small>{project?.site}</small></div>
-        </div>
-        {d.title && <h2 style={{ textAlign: 'center', textTransform: 'uppercase' }}>{d.title}</h2>}
-        <table>
-          <thead><tr><th>Sr.No.</th><th>Description</th><th className="num">QTY</th><th>UNIT</th><th className="num">RATE</th><th className="num">AMOUNT</th><th>REMARK</th></tr></thead>
+        </section>
+
+        {d.title && <div className="doc-subject">{d.title}</div>}
+
+        <table className="doc-table">
+          <thead><tr><th style={{ width: 46 }}>Sr.</th><th>Description</th><th className="num">Qty</th><th>Unit</th><th className="num">Rate</th><th className="num">Amount</th><th>Remark</th></tr></thead>
           <tbody>
             {groups.map((g, gi) => [
-              g.section && <tr key={'s' + gi} className="sec"><td colSpan={7}>{g.section}</td></tr>,
+              g.section && <tr key={'s' + gi} className="sec"><td colSpan={7}><Leaf size={12} /> {g.section}</td></tr>,
               ...g.lines.map((l, i) => (
                 <tr key={gi + '-' + i}><td>{++sr}</td><td>{l.description}</td><td className="num">{l.qty}</td><td>{l.unit}</td>
                   <td className="num">{inr(l.rate)}</td><td className="num">{inr(l.amount)}</td><td>{l.remark}</td></tr>
               )),
             ])}
-            <tr><td colSpan={5} className="num"><b>Basic Total Amount</b></td><td className="num"><b>{inr(d.subTotal)}</b></td><td /></tr>
-            {gstParts(d).map(([l, v]) => <tr key={l}><td colSpan={5} className="num">{l}</td><td className="num">{inr(v)}</td><td /></tr>)}
-            {d.discount > 0 && <tr><td colSpan={5} className="num">Discount</td><td className="num">− {inr(d.discount)}</td><td /></tr>}
-            <tr><td colSpan={5} className="num"><b>Grand Total Amount</b></td><td className="num"><b>{inr(d.grandTotal)}</b></td><td /></tr>
           </tbody>
         </table>
-        {(d.terms || d.notes) && <div style={{ marginTop: 18, whiteSpace: 'pre-wrap', fontSize: 12 }}><b>{isBill ? 'Notes' : 'Terms & Conditions'}</b><br />{d.terms || d.notes}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 60 }}>
-          <div style={{ textAlign: 'center' }}><div style={{ borderTop: '1px solid #999', width: 200, paddingTop: 6 }}>For {COMPANY.name}</div></div>
+
+        <div className="doc-bottom">
+          <div className="doc-words">
+            {(d.terms || d.notes) && <><div className="doc-label">{isBill ? 'Notes' : 'Terms & conditions'}</div><div style={{ whiteSpace: 'pre-wrap' }}>{d.terms || d.notes}</div></>}
+          </div>
+          <table className="doc-sum"><tbody>
+            <tr><td>Basic total</td><td className="num">{inr(d.subTotal)}</td></tr>
+            {gstParts(d).map(([l, v]) => <tr key={l}><td>{l}</td><td className="num">{inr(v)}</td></tr>)}
+            {!d.gstEnabled && <tr><td>GST</td><td className="num">Not applicable</td></tr>}
+            {d.discount > 0 && <tr><td>Discount</td><td className="num">− {inr(d.discount)}</td></tr>}
+            <tr className="gt"><td>Grand total</td><td className="num">{inr(d.grandTotal)}</td></tr>
+          </tbody></table>
         </div>
+
+        <div className="doc-sign">
+          <div>Client signature</div>
+          <div>For <b>{s.companyName}</b><br /><span className="muted">Authorised signatory</span></div>
+        </div>
+
+        <footer className="doc-foot">
+          <Foliage className="doc-foot-leaf" flip />
+          <span>Thank you for growing with us 🌿</span>
+          <Foliage className="doc-foot-leaf" />
+        </footer>
       </div>
     </div>
   );

@@ -32,7 +32,7 @@ export function FormModal({ title, fields, value, onClose, onSave }) {
   const set = (k, x) => setV(s => ({ ...s, [k]: x }));
   const submit = async e => {
     e.preventDefault();
-    try { await onSave(v); onClose(); } catch (x) { setErr(x.message); }
+    try { await onSave(v); onClose(); toast('Saved'); } catch (x) { setErr(x.message); }
   };
   return (
     <Modal title={title} onClose={onClose}>
@@ -47,9 +47,11 @@ export function FormModal({ title, fields, value, onClose, onSave }) {
               </select>
             ) : f.type === 'textarea' ? (
               <textarea rows={3} value={v[f.k] ?? ''} onChange={e => set(f.k, e.target.value)} />
+            ) : f.type === 'number' ? (
+              <Num value={v[f.k]} onChange={n => set(f.k, n)} required={f.required} />
             ) : (
-              <input type={f.type || 'text'} step="any" required={f.required} value={f.type === 'date' ? (v[f.k] || '').slice(0, 10) : v[f.k] ?? ''}
-                onChange={e => set(f.k, f.type === 'number' ? +e.target.value : e.target.value)} />
+              <input type={f.type || 'text'} required={f.required} value={f.type === 'date' ? (v[f.k] || '').slice(0, 10) : v[f.k] ?? ''}
+                onChange={e => set(f.k, e.target.value)} />
             )}
           </label>
         ))}
@@ -63,5 +65,38 @@ export function FormModal({ title, fields, value, onClose, onSave }) {
   );
 }
 
-export const Badge = ({ s }) => <span className={'badge b-' + s}>{s}</span>;
+// Number input that keeps what the user types (no "010"): empty shows placeholder 0,
+// text is selected on focus, and the parent always receives a number.
+export function Num({ value, onChange, max, min = 0, ...props }) {
+  const [text, setText] = useState(value ? String(value) : '');
+  useEffect(() => {
+    if ((parseFloat(text) || 0) !== (+value || 0)) setText(value ? String(value) : '');
+  }, [value]);
+  const change = e => {
+    let t = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').replace(/^0+(?=\d)/, '');
+    let n = parseFloat(t) || 0;
+    if (max !== undefined && n > max) { n = max; t = String(max); }
+    if (n < min) { n = min; t = String(min); }
+    setText(t); onChange(n);
+  };
+  return <input inputMode="decimal" placeholder="0" value={text} onChange={change} onFocus={e => e.target.select()} {...props} />;
+}
+
+// Small toast notifications: toast('Saved')
+export function toast(msg, type = 'ok') { window.dispatchEvent(new CustomEvent('sg-toast', { detail: { msg, type } })); }
+export function Toasts() {
+  const [list, setList] = useState([]);
+  useEffect(() => {
+    const on = e => {
+      const t = { id: Math.random(), ...e.detail };
+      setList(l => [...l, t]);
+      setTimeout(() => setList(l => l.filter(x => x.id !== t.id)), 2600);
+    };
+    window.addEventListener('sg-toast', on);
+    return () => window.removeEventListener('sg-toast', on);
+  }, []);
+  return <div className="toasts">{list.map(t => <div key={t.id} className={'toast ' + t.type}>{t.type === 'ok' ? '✓' : '!'} {t.msg}</div>)}</div>;
+}
+
+export const Badge =({ s }) => <span className={'badge b-' + s}>{s}</span>;
 export const Bar = ({ pct, warn }) => <div className={'bar' + (warn ? ' warn' : '')}><i style={{ width: Math.min(100, Math.max(0, pct || 0)) + '%' }} /></div>;

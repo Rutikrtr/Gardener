@@ -22,6 +22,7 @@ export const User = model('User', new Schema({
   },
   settings: {
     companyName: String,
+    logo: String, // small data URL image shown on quotations & bills
     tagline: String,
     address: String,
     phone: String,

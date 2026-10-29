@@ -1,16 +1,27 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Plus, Printer, Pencil, Trash2, ArrowLeft } from 'lucide-react';
-import { useApi, FormModal, Badge, Bar } from './ui';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Plus, Printer, Pencil, Trash2, ArrowLeft, CheckCircle2, ArrowRight, Sparkles, Info, Loader2 } from 'lucide-react';
+import { useApi, FormModal, Badge, Bar, toast } from './ui';
 import { api, inr, dt } from '../api';
 import { projectFields } from './Projects';
+import Overview from './Overview';
+
+function StatusPicker({ q, busy, onChange }) {
+  if (busy) return <span className="badge b-sent"><Loader2 size={12} className="spin" /> Updating…</span>;
+  return (
+    <select className={'status-select s-' + q.status} value={q.status} onChange={e => onChange(e.target.value)}>
+      {['draft', 'sent', 'approved', 'rejected'].map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+    </select>
+  );
+}
 
 const TABS = ['Overview', 'Quotations', 'Stage Bills', 'Payments', 'Daily Usage', 'Plant Stock'];
 
 export default function ProjectDetail() {
   const { id } = useParams();
   const nav = useNavigate();
-  const [tab, setTab] = useState('Overview');
+  const [tab, setTab] = useState(useLocation().state?.tab || 'Overview');
+  const [busy, setBusy] = useState(null);
   const [p, reloadP] = useApi('/projects/' + id);
   const [sum, reloadSum] = useApi(`/projects/${id}/summary`);
   const [quotes, reloadQ] = useApi('/quotations?project=' + id, []);
@@ -29,6 +40,18 @@ export default function ProjectDetail() {
     await api(path, { method: 'DELETE' });
     reloadAll();
     return true;
+  };
+  const approvedQ = quotes.filter(q => q.status === 'approved');
+  const setQStatus = async (q, status) => {
+    setBusy(q._id);
+    try {
+      await api('/quotations/' + q._id, { method: 'PUT', body: { status } });
+      if (status === 'approved' && p.status === 'quotation') await api('/projects/' + id, { method: 'PUT', body: { status: 'active' } });
+      await new Promise(r => setTimeout(r, 700)); // short pause so the change feels deliberate
+      reloadAll();
+      toast(status === 'approved' ? `${q.number} approved — ready for stage billing` : `${q.number} marked ${status}`);
+    } catch (e) { toast(e.message, 'err'); }
+    setBusy(null);
   };
   const billed = sum?.billed || 0;
   const paidByBill = b => pays.filter(x => x.bill?._id === b._id).reduce((s, x) => s + x.amount, 0);
@@ -53,41 +76,34 @@ export default function ProjectDetail() {
 
       <div className="tabs">{TABS.map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}</button>)}</div>
 
-      {tab === 'Overview' && (
-        <div className="grid g2">
-          <div className="card">
-            <h2>Workflow</h2>
-            <ol style={{ lineHeight: 2, margin: 0, paddingLeft: 18, color: 'var(--ink-2)' }}>
-              <li>Create a <b>Quotation</b> from the price list and mark it <b>Approved</b> when the client accepts.</li>
-              <li>As work progresses, raise <b>Stage Bills</b> (Stage 1, 2, …) for supplied plants & material.</li>
-              <li>Record <b>Payments</b> against each stage bill.</li>
-              <li>Log <b>Daily Usage</b> — e.g. 11th: 50 plants planted. Unused billed plants carry to the next stage.</li>
-              <li>Check <b>Plant Stock</b> for quoted vs billed vs used vs remaining.</li>
-            </ol>
-          </div>
-          <div className="card">
-            <h2>Progress</h2>
-            <small>Billed against approved quotation</small>
-            <div className="row" style={{ margin: '8px 0 16px' }}><Bar pct={sum?.quoted ? billed / sum.quoted * 100 : 0} /><b>{sum?.quoted ? Math.round(billed / sum.quoted * 100) : 0}%</b></div>
-            <small>Payment collected</small>
-            <div className="row" style={{ marginTop: 8 }}><Bar pct={billed ? sum.received / billed * 100 : 0} /><b>{billed ? Math.round(sum.received / billed * 100) : 0}%</b></div>
-            <p><small>Remaining to bill: <b>{inr(sum?.toBill)}</b></small></p>
-          </div>
-        </div>
-      )}
+      {tab === 'Overview' && <Overview p={p} sum={sum} quotes={quotes} bills={bills} pays={pays} usage={usage} ledger={ledger}
+        go={t => (t === 'edit' ? setModal('project') : setTab(t))} />}
 
       {tab === 'Quotations' && (
-        <div className="card">
+        <div className="card fade">
           <div className="head"><h2 style={{ margin: 0 }}>Quotations</h2><Link className="btn primary" to={`/projects/${id}/quotation/new`}><Plus size={15} /> New quotation</Link></div>
+          {approvedQ.length > 0 && (
+            <div className="notice ok">
+              <CheckCircle2 size={16} /><span className="grow">Quotation <b>{approvedQ[0].number}</b> is approved. {sum?.toBill > 0 ? `${inr(sum.toBill)} is ready to bill.` : 'Fully billed.'}</span>
+              {sum?.toBill > 0 && <button className="primary" onClick={() => setTab('Stage Bills')}>Go to bills <ArrowRight size={15} /></button>}
+            </div>
+          )}
           <DocTable rows={quotes} kind="quotation" pid={id} onDelete={d => del('/quotations/' + d._id, 'Delete quotation?')}
-            extra={q => <select value={q.status} style={{ width: 120 }} onChange={async e => { await api('/quotations/' + q._id, { method: 'PUT', body: { status: e.target.value } }); reloadAll(); }}>
-              {['draft', 'sent', 'approved', 'rejected'].map(s => <option key={s}>{s}</option>)}</select>} />
+            extra={q => <StatusPicker q={q} busy={busy === q._id} onChange={s => setQStatus(q, s)} />} />
         </div>
       )}
 
       {tab === 'Stage Bills' && (
-        <div className="card">
+        <div className="card fade">
           <div className="head"><h2 style={{ margin: 0 }}>Stage-wise bills</h2><Link className="btn primary" to={`/projects/${id}/bill/new`}><Plus size={15} /> New stage bill</Link></div>
+          {approvedQ.length > 0 && sum?.toBill > 0 && (
+            <div className="notice ok glow">
+              <Sparkles size={16} />
+              <span className="grow">Approved quotation <b>{approvedQ.map(q => q.number).join(', ')}</b> — <b>{inr(sum.toBill)}</b> left to bill. Make {bills.length ? `Stage ${bills.length + 1}` : 'the first stage'} bill from it.</span>
+              <Link className="btn primary" to={`/projects/${id}/bill/new`}>Create Stage {bills.length + 1} bill <ArrowRight size={15} /></Link>
+            </div>
+          )}
+          {!approvedQ.length && <div className="notice warn"><Info size={16} /> No approved quotation yet. Approve one in Quotations so bills follow its quantities.</div>}
           <DocTable rows={bills} kind="bill" pid={id} onDelete={d => del('/bills/' + d._id, 'Delete bill?')}
             extra={b => { const paid = paidByBill(b); return <span className={paid >= b.grandTotal ? 'pos' : 'neg'}>{paid >= b.grandTotal ? 'Paid' : 'Due ' + inr(b.grandTotal - paid)}</span>; }} />
         </div>

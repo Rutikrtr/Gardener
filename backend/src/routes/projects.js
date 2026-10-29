@@ -31,8 +31,46 @@ async function newDoc(req, Model, prefix, extra = {}) {
 r.post('/:pid/quotations', async (req, res) => res.json(await newDoc(req, Quotation, 'QT')));
 
 r.post('/:pid/bills', async (req, res) => {
+  const over = await billOverLimit(req.params.pid, req.body.lines);
+  if (over) return res.status(400).json({ message: over });
   const stage = (await Bill.countDocuments({ project: req.params.pid })) + 1;
   res.json(await newDoc(req, Bill, 'INV', { stage }));
+});
+
+// Approved quotation qty per item, and qty already billed (optionally excluding one bill)
+async function quotedAndBilled(pid, excludeBill) {
+  const p = oid(pid);
+  const sumLines = (Model, match) => Model.aggregate([
+    { $match: match }, { $unwind: '$lines' }, { $match: { 'lines.item': { $ne: null } } },
+    { $group: { _id: '$lines.item', qty: { $sum: '$lines.qty' } } },
+  ]);
+  const billMatch = { project: p, ...(excludeBill ? { _id: { $ne: oid(excludeBill) } } : {}) };
+  const [q, b] = await Promise.all([sumLines(Quotation, { project: p, status: 'approved' }), sumLines(Bill, billMatch)]);
+  const toMap = a => Object.fromEntries(a.map(x => [String(x._id), x.qty]));
+  return { quoted: toMap(q), billed: toMap(b) };
+}
+
+// Bills can't go over the approved quotation: returns an error message, or null when ok.
+// Items that aren't in an approved quotation (extra work) are not limited.
+export async function billOverLimit(pid, lines = [], excludeBill) {
+  const { quoted, billed } = await quotedAndBilled(pid, excludeBill);
+  const want = {};
+  lines.forEach(l => { if (l.item) want[String(l.item)] = (want[String(l.item)] || 0) + (+l.qty || 0); });
+  for (const [itemId, qty] of Object.entries(want)) {
+    if (quoted[itemId] === undefined) continue;
+    const left = quoted[itemId] - (billed[itemId] || 0);
+    if (qty > left) {
+      const it = await Item.findById(itemId);
+      return `${it?.name || 'Item'}: only ${Math.max(0, left)} ${it?.unit || ''} left to bill from the approved quotation (you entered ${qty}).`;
+    }
+  }
+  return null;
+}
+
+// How much of each item can still be billed (used by the bill editor)
+r.get('/:pid/billable', async (req, res) => {
+  const { quoted, billed } = await quotedAndBilled(req.params.pid, req.query.excludeBill);
+  res.json(Object.fromEntries(Object.entries(quoted).map(([k, q]) => [k, { quoted: q, billed: billed[k] || 0, left: Math.max(0, q - (billed[k] || 0)) }])));
 });
 
 // Material ledger per item:

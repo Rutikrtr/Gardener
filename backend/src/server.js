@@ -8,7 +8,7 @@ import { connectDB } from './db.js';
 import { auth, clientOnly } from './middleware/auth.js';
 import { crud } from './routes/crud.js';
 import authRoutes from './routes/auth.js';
-import projectRoutes from './routes/projects.js';
+import projectRoutes, { billOverLimit } from './routes/projects.js';
 import analyticsRoutes from './routes/analytics.js';
 import { User, Item, Client, Project, Quotation, Bill, Payment, Usage } from './models/index.js';
 
@@ -30,6 +30,13 @@ app.use('/api/items', biz, crud(Item, { sort: 'name', filters: ['category'] }));
 app.use('/api/clients', biz, crud(Client, { sort: 'name' }));
 app.use('/api/projects', biz, projectRoutes, crud(Project, { populate: 'client', filters: ['status'] }));
 app.use('/api/quotations', biz, crud(Quotation, { populate: { path: 'project', populate: 'client' }, filters: ['project', 'status'] }));
+// Editing a bill must also stay within the approved quotation
+app.put('/api/bills/:id', biz, async (req, res, next) => {
+  const bill = await Bill.findOne({ _id: req.params.id, owner: req.user.id });
+  if (!bill || !req.body.lines) return next();
+  const over = await billOverLimit(bill.project, req.body.lines, bill._id);
+  over ? res.status(400).json({ message: over }) : next();
+});
 app.use('/api/bills', biz, crud(Bill, { populate: { path: 'project', populate: 'client' }, sort: 'stage', filters: ['project'] }));
 app.use('/api/payments', biz, crud(Payment, { populate: 'bill', sort: '-date', filters: ['project', 'bill'] }));
 app.use('/api/usage', biz, crud(Usage, { populate: 'item', sort: '-date', filters: ['project', 'item'] }));

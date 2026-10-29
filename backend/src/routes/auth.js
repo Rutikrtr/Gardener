@@ -36,7 +36,7 @@ r.put('/settings', auth, async (req, res) => {
 });
 
 // Superadmin: manage client accounts (service on/off, annual plan)
-const clientView = '-password -settings.terms';
+const clientView = '-password -settings';
 r.get('/accounts', auth, superadmin, async (_req, res) => {
   res.json(await User.find({ role: 'user' }).select(clientView).sort('-createdAt'));
 });

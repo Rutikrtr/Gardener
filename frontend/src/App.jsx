@@ -11,6 +11,7 @@ import Items from './pages/Items';
 import Clients from './pages/Clients';
 import Accounts from './pages/Accounts';
 import Settings from './pages/Settings';
+import { Toasts } from './pages/ui';
 
 function Shell({ nav, children }) {
   const user = getUser();
@@ -29,7 +30,8 @@ function Shell({ nav, children }) {
           <button className="icon" title="Logout" onClick={logout}><LogOut size={16} /></button>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main" key={useLocation().pathname}>{children}</main>
+      <Toasts />
     </div>
   );
 }
