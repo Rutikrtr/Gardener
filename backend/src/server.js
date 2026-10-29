@@ -16,7 +16,9 @@ const app = express();
 const origins = (process.env.CORS_ORIGIN || '*').split(',').map(s => s.trim());
 
 app.use(helmet());
-app.use(cors({ origin: origins.includes('*') ? true : origins }));
+// Allow configured origins plus any localhost / 127.0.0.1 port for local development
+const localDev = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+app.use(cors({ origin: origins.includes('*') ? true : (o, cb) => cb(null, !o || origins.includes(o) || localDev.test(o)) }));
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('tiny'));
 
