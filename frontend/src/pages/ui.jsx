@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle2, Circle } from 'lucide-react';
 import { api, dt } from '../api';
 
@@ -14,14 +15,24 @@ export function useApi(path, initial = null) {
   return [data, load, error];
 }
 
+// Popup rendered on <body> so it always covers the whole screen (page animations can't trap it).
+// Esc or clicking outside closes it; the page behind doesn't scroll while it is open.
 export function Modal({ title, onClose, children }) {
-  return (
+  useEffect(() => {
+    const onKey = e => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  return createPortal(
     <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="head" style={{ marginBottom: 16 }}><h2 style={{ margin: 0 }}>{title}</h2><button className="icon" onClick={onClose}><X size={18} /></button></div>
-        {children}
+      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="modal-head"><h2>{title}</h2><button className="icon" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
