@@ -8,9 +8,9 @@ import { connectDB } from './db.js';
 import { auth, clientOnly } from './middleware/auth.js';
 import { crud } from './routes/crud.js';
 import authRoutes from './routes/auth.js';
-import projectRoutes, { billOverLimit, usageOverLimit } from './routes/projects.js';
+import projectRoutes, { billOverLimit, usageOverLimit, allocateUsage } from './routes/projects.js';
 import analyticsRoutes from './routes/analytics.js';
-import { User, Item, Client, Project, Quotation, Bill, Payment, Usage, Expense } from './models/index.js';
+import { User, Item, Client, Project, Quotation, Bill, Payment, Usage, Expense, Supplier, Purchase, SupplierPayment, Worker, Labour } from './models/index.js';
 
 const app = express();
 const origins = (process.env.CORS_ORIGIN || '*').split(',').map(s => s.trim());
@@ -29,6 +29,20 @@ const biz = [auth, clientOnly];
 app.use('/api/items', biz, crud(Item, { sort: 'name', filters: ['category'] }));
 app.use('/api/clients', biz, crud(Client, { sort: 'name' }));
 app.use('/api/projects', biz, projectRoutes, crud(Project, { populate: 'client', filters: ['status'] }));
+// Records that belong to a project may only be created for one of your own projects
+const ownProject = async (req, res, next) => {
+  if (req.body.project && !(await Project.exists({ _id: req.body.project, owner: req.user.id }))) return res.status(404).json({ message: 'Project not found' });
+  next();
+};
+app.post(['/api/payments', '/api/expenses', '/api/purchases', '/api/supplier-payments', '/api/labour'], biz, ownProject);
+
+// Only one work order per project: making one "approved" turns the others into "revised"
+app.put('/api/quotations/:id', biz, async (req, res, next) => {
+  if (req.body.status !== 'approved') return next();
+  const q = await Quotation.findOne({ _id: req.params.id, owner: req.user.id });
+  if (q) for (const o of await Quotation.find({ project: q.project, status: 'approved', _id: { $ne: q._id } })) { o.status = 'revised'; await o.save(); }
+  next();
+});
 app.use('/api/quotations', biz, crud(Quotation, { populate: { path: 'project', populate: 'client' }, filters: ['project', 'status'] }));
 // Editing a bill must also stay within the approved quotation
 app.put('/api/bills/:id', biz, async (req, res, next) => {
@@ -54,6 +68,19 @@ app.put('/api/usage/:id', biz, async (req, res, next) => {
 });
 app.use('/api/usage', biz, crud(Usage, { populate: 'item', sort: '-date', filters: ['project', 'item'] }));
 app.use('/api/expenses', biz, crud(Expense, { sort: '-date', filters: ['project', 'category'] }));
+app.use('/api/suppliers', biz, crud(Supplier, { sort: 'name' }));
+// Every purchase with how much is used on its project's site (oldest delivery used first)
+app.get('/api/purchase-usage', biz, async (req, res) => {
+  const [buys, usage] = await Promise.all([
+    Purchase.find({ owner: req.user.id }).populate('supplier item project'),
+    Usage.find({ owner: req.user.id }),
+  ]);
+  res.json(allocateUsage(buys, usage).reverse());
+});
+app.use('/api/purchases', biz, crud(Purchase, { populate: 'supplier item project', sort: '-date', filters: ['project', 'supplier'] }));
+app.use('/api/supplier-payments', biz, crud(SupplierPayment, { populate: 'supplier project', sort: '-date', filters: ['project', 'supplier'] }));
+app.use('/api/workers', biz, crud(Worker, { sort: 'name' }));
+app.use('/api/labour', biz, crud(Labour, { populate: 'worker project', sort: '-date', filters: ['project', 'worker', 'paid'] }));
 app.use('/api/analytics', biz, analyticsRoutes);
 
 app.use((err, _req, res, _next) => {

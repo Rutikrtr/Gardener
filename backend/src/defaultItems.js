@@ -10,4 +10,4 @@ export const DEFAULT_ITEMS = [
   ['FYM / Compost', 'Manure', 'Brass'], ['Vermicompost', 'Manure', 'KG'],
   ['Korean Carpet Lawn (Turfing)', 'Lawn', 'S.mt'], ['Semi automatic irrigation system', 'Irrigation', 'S.mt'],
   ['Tree shifting & plantation (pit 1x1x1 m, transport)', 'Service', N],
-].map(([name, category, unit]) => ({ name, category, unit, rate: 0 }));
+].map(([name, category, unit]) => ({ name, category, unit, rate: 0, gstPercent: 0 }));

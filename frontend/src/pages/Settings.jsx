@@ -84,11 +84,20 @@ export default function Settings() {
                 </label>
                 <div className="full" style={{ background: 'var(--green-soft)', borderRadius: 10, padding: 12 }}>
                   {s.gstType === 'igst' ? <b>IGST {s.gstPercent}%</b> : <b>CGST {half}% + SGST {half}% = {s.gstPercent}%</b>}
-                  <small>Default for new documents. You can still change it on each quotation or bill.</small>
+                  <small>Used for items without their own GST rate. Each item has its own GST % in the Price List (e.g. plants 0%).</small>
                 </div>
               </div>
             )}
             {!s.gstEnabled && <small style={{ marginTop: 10 }}>New quotations and bills will be created without GST.</small>}
+          </div>
+          <div className="card">
+            <h2>TDS & labour</h2>
+            <div className="form">
+              <label>TDS customer deducts %<Num value={s.tdsPercent ?? 1} max={20} onChange={n => set('tdsPercent', n)} /></label>
+              <label>Employer PF %<Num value={s.pfPercent ?? 12} max={30} onChange={n => set('pfPercent', n)} /></label>
+              <label>Employer ESI %<Num value={s.esiPercent ?? 3.25} max={10} onChange={n => set('esiPercent', n)} /></label>
+            </div>
+            <small style={{ marginTop: 10 }}>TDS is pre-filled on new bills. PF / ESI are added to labour cost for workers who have them.</small>
           </div>
           <div className="card">
             <h2>Default quotation terms</h2>

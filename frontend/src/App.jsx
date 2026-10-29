@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Bills from './pages/Bills';
-import { LayoutDashboard, FolderKanban, Receipt, Sprout, Users, Building2, Settings as SettingsIcon, LogOut, Leaf } from 'lucide-react';
+import Suppliers from './pages/Suppliers';
+import Workers from './pages/Workers';
+import Reports from './pages/Reports';
+import { LayoutDashboard, FolderKanban, Receipt, Truck, HardHat, FileSpreadsheet, Sprout, Users, Building2, Settings as SettingsIcon, LogOut, Leaf, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
 import { getUser, logout } from './api';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -25,18 +28,26 @@ function Shell({ nav, children }) {
     window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
   }, [loc.pathname]);
+  // Sidebar starts closed (icons only); the choice is remembered on this device
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem('sg_side') === 'open'; } catch { return false; } });
+  const toggle = () => setOpen(o => { try { localStorage.setItem('sg_side', o ? 'closed' : 'open'); } catch {} return !o; });
   return (
-    <div className="shell">
+    <div className={'shell' + (open ? ' side-open' : ' side-closed')}>
       <aside className="side">
-        <div className="brand"><span className="logo"><Leaf size={18} /></span><div><b>Smart Garden</b><small>{user?.role === 'superadmin' ? 'Admin console' : user?.name}</small></div></div>
+        <div className="brand">
+          <button className="logo side-toggle" onClick={toggle} title={open ? 'Close menu' : 'Open menu'} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}>
+            <span className="tg-leaf"><Leaf size={18} /></span><span className="tg-menu">{open ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</span>
+          </button>
+          <div className="side-text"><b>Smart Garden</b><small>{user?.role === 'superadmin' ? 'Admin console' : user?.name}</small></div>
+        </div>
         <nav>
           {nav.map(([to, label, Icon]) => (
-            <NavLink key={to} to={to} end={to === '/'}><Icon size={18} /> <span>{label}</span></NavLink>
+            <NavLink key={to} to={to} end={to === '/'} title={open ? undefined : label} data-tip={label}><Icon size={18} /> <span className="side-text">{label}</span></NavLink>
           ))}
         </nav>
         <div className="me">
-          <div className="avatar">{(user?.name || user?.username || '?')[0].toUpperCase()}</div>
-          <div className="grow"><b>{user?.name || user?.username}</b><small>{user?.role === 'superadmin' ? 'superadmin' : user?.username}</small></div>
+          <div className="avatar" title={user?.name || user?.username}>{(user?.name || user?.username || '?')[0].toUpperCase()}</div>
+          <div className="grow side-text"><b>{user?.name || user?.username}</b><small>{user?.role === 'superadmin' ? 'superadmin' : user?.username}</small></div>
           <button className="icon" title="Logout" onClick={logout}><LogOut size={16} /></button>
         </div>
       </aside>
@@ -66,6 +77,9 @@ export default function App() {
     ['/', 'Dashboard', LayoutDashboard],
     ['/projects', 'Projects', FolderKanban],
     ['/bills', 'Bills', Receipt],
+    ['/suppliers', 'Suppliers', Truck],
+    ['/workers', 'Workers', HardHat],
+    ['/reports', 'Reports', FileSpreadsheet],
     ['/items', 'Price List', Sprout],
     ['/clients', 'Clients', Users],
     ['/settings', 'Settings', SettingsIcon],
@@ -79,6 +93,9 @@ export default function App() {
         <Route path="/projects/:pid/:kind/new" element={<DocEditor />} />
         <Route path="/projects/:pid/:kind/:id" element={<DocEditor />} />
         <Route path="/bills" element={<Bills />} />
+        <Route path="/suppliers" element={<Suppliers />} />
+        <Route path="/workers" element={<Workers />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/items" element={<Items />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/settings" element={<Settings />} />

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { Project, Quotation, Bill, Payment, Usage, Item, Client, Expense } from '../models/index.js';
-import { billedMaterialCost } from './projects.js';
+import { finance } from './projects.js';
 
 const r = Router();
 
@@ -48,11 +48,9 @@ r.get('/', async (req, res) => {
     ]),
   ]);
 
-  // Profit across all projects: revenue (excl. GST) − purchase cost of billed items − internal expenses
-  const [revenue, expenses, materialCost] = await Promise.all([
-    total(Bill, {}, '$subTotal'), total(Expense, {}, '$amount'), billedMaterialCost({ owner }),
-  ]);
-  const profit = revenue - materialCost - expenses;
+  // Profit across all projects: revenue (excl. GST) − purchases − labour − other expenses
+  const f = await finance({ owner });
+  const pendingCerts = await Bill.countDocuments({ owner, $or: [{ tdsPercent: { $gt: 0 }, tdsCertReceived: { $ne: true } }, { gstReportReceived: { $ne: true } }] });
 
   const months = [];
   for (let i = 0; i < 12; i++) {
@@ -66,9 +64,10 @@ r.get('/', async (req, res) => {
   }
 
   res.json({
-    projects, clients, items, quotedApproved, billed, received, outstanding: billed - received,
+    projects, clients, items, quotedApproved, billed, received, outstanding: f.outstanding,
     byStatus, quotations, monthly: months, topItems, recentPayments, projectRows,
-    revenue, expenses, materialCost, profit, margin: revenue ? Math.round(profit / revenue * 100) : 0,
+    revenue: f.revenue, expenses: f.expenses, labourCost: f.labourCost, materialCost: f.materialCost, profit: f.profit, margin: f.margin,
+    supplierDue: f.supplierDue, labourUnpaid: f.labourUnpaid, tds: f.tds, pendingCerts,
   });
 });
 

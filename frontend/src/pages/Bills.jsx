@@ -16,7 +16,7 @@ export default function Bills() {
   const rows = (kind === 'bill' ? bills : quotes)
     .filter(d => !q || [d.number, d.title, d.project?.name, d.project?.client?.name].join(' ').toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => new Date(b.date) - new Date(a.date));
-  const totalBilled = bills.reduce((s, b) => s + b.grandTotal, 0);
+  const totalBilled = bills.reduce((s, b) => s + (b.netReceivable ?? b.grandTotal), 0);
   const totalPaid = pays.reduce((s, x) => s + x.amount, 0);
 
   return (
@@ -48,7 +48,7 @@ export default function Bills() {
                 {kind === 'bill' && <td>Stage {d.stage}</td>}
                 <td className="num"><b>{inr(d.grandTotal)}</b></td>
                 <td>{kind === 'bill'
-                  ? <span className={'badge ' + (paid >= d.grandTotal ? 'b-approved' : paid > 0 ? 'b-sent' : 'b-rejected')}>{paid >= d.grandTotal ? 'Paid' : paid > 0 ? 'Part paid' : 'Unpaid'}</span>
+                  ? <span className={'badge ' + (paid >= (d.netReceivable ?? d.grandTotal) ? 'b-approved' : paid > 0 ? 'b-sent' : 'b-rejected')}>{paid >= (d.netReceivable ?? d.grandTotal) ? 'Paid' : paid > 0 ? 'Part paid' : 'Unpaid'}</span>
                   : <Badge s={d.status} />}</td>
                 <td><div className="row" style={{ flexWrap: 'nowrap', gap: 2 }}>
                   <a className="btn view-btn" href={`/print/${kind}/${d._id}`} target="_blank"><Eye size={15} /> View</a>

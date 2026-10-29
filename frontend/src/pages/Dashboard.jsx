@@ -26,6 +26,12 @@ export default function Dashboard() {
         {kpis.map(([l, v, I]) => <div className="card kpi" key={l}><div className="label"><span className="ico"><I size={16} /></span>{l}</div><div className="val">{v}</div></div>)}
       </div>
 
+      <div className="grid g3" style={{ marginTop: 16 }}>
+        <Link to="/suppliers" className="card attention"><small>Suppliers · to pay</small><b className={a.supplierDue > 0 ? 'neg' : ''}>{inr(a.supplierDue)}</b></Link>
+        <Link to="/workers" className="card attention"><small>Labour · unpaid wages</small><b className={a.labourUnpaid > 0 ? 'neg' : ''}>{inr(a.labourUnpaid)}</b></Link>
+        <Link to="/bills" className="card attention"><small>Bills · TDS / GST papers pending</small><b className={a.pendingCerts ? 'neg' : 'pos'}>{a.pendingCerts ? `${a.pendingCerts} bill${a.pendingCerts > 1 ? 's' : ''}` : 'All received ✓'}</b></Link>
+      </div>
+
       <div className="grid g2" style={{ marginTop: 16 }}>
         <div className="card">
           <h2>Billed vs received · last 12 months</h2>

@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Printer, Leaf } from 'lucide-react';
 import { useApi } from './ui';
-import { inr, dt, gstParts } from '../api';
+import { inr, dt, gstParts, lineGst } from '../api';
 
 // Decorative leafy branch for the header / footer (pure SVG, prints in colour)
 function Foliage({ flip, className }) {
@@ -26,6 +26,7 @@ export default function PrintDoc() {
   const [s] = useApi('/auth/settings');
   if (!d || !s) return <div className="empty">Loading…</div>;
   const project = d.project;
+  const isWO = !isBill && d.status === 'approved';
   const client = project?.client;
 
   // group lines by section, keeping order of first appearance
@@ -58,11 +59,14 @@ export default function PrintDoc() {
             </div>
           </div>
           <div className="doc-type">
-            <div className="doc-title">{isBill ? (d.gstEnabled ? 'TAX INVOICE' : 'INVOICE') : 'QUOTATION'}</div>
+            <div className="doc-title">{isBill ? (d.gstEnabled ? 'TAX INVOICE' : 'INVOICE') : isWO ? 'WORK ORDER' : 'QUOTATION'}</div>
             {isBill && <div className="doc-stage">Running bill · Stage {d.stage}</div>}
+            {!isBill && <div className="doc-stage">{isWO ? 'Final quotation' : d.revision ? `Revision ${d.revision}` : 'Original'}</div>}
             <table className="doc-meta"><tbody>
               <tr><td>No.</td><td><b>{d.number}</b></td></tr>
               <tr><td>Date</td><td><b>{dt(d.date)}</b></td></tr>
+              {isWO && d.poNumber && <tr><td>Customer PO</td><td><b>{d.poNumber}</b></td></tr>}
+              {isWO && d.poDate && <tr><td>PO date</td><td><b>{dt(d.poDate)}</b></td></tr>}
             </tbody></table>
           </div>
         </header>
@@ -85,13 +89,13 @@ export default function PrintDoc() {
         {d.title && <div className="doc-subject">{d.title}</div>}
 
         <table className="doc-table">
-          <thead><tr><th style={{ width: 46 }}>Sr.</th><th>Description</th><th className="num">Qty</th><th>Unit</th><th className="num">Rate</th><th className="num">Amount</th><th>Remark</th></tr></thead>
+          <thead><tr><th style={{ width: 46 }}>Sr.</th><th>Description</th><th className="num">Qty</th><th>Unit</th><th className="num">Rate</th>{d.gstEnabled && <th className="num">GST</th>}<th className="num">Amount</th><th>Remark</th></tr></thead>
           <tbody>
             {groups.map((g, gi) => [
-              g.section && <tr key={'s' + gi} className="sec"><td colSpan={7}><Leaf size={12} /> {g.section}</td></tr>,
+              g.section && <tr key={'s' + gi} className="sec"><td colSpan={d.gstEnabled ? 8 : 7}><Leaf size={12} /> {g.section}</td></tr>,
               ...g.lines.map((l, i) => (
-                <tr key={gi + '-' + i}><td>{++sr}</td><td>{l.description}</td><td className="num">{l.qty}</td><td>{l.unit}</td>
-                  <td className="num">{inr(l.rate)}</td><td className="num">{inr(l.amount)}</td><td>{l.remark}</td></tr>
+                <tr key={gi + '-' + i}><td>{++sr}</td><td>{l.description}{l.extra && <div className="muted" style={{ fontSize: 11 }}>Extra beyond work order</div>}</td><td className="num">{l.qty}</td><td>{l.unit}</td>
+                  <td className="num">{inr(l.rate)}</td>{d.gstEnabled && <td className="num">{lineGst(l, d)}%</td>}<td className="num">{inr(l.amount)}</td><td>{l.remark}</td></tr>
               )),
             ])}
           </tbody>
@@ -102,10 +106,9 @@ export default function PrintDoc() {
             {(d.terms || d.notes) && <><div className="doc-label">{isBill ? 'Notes' : 'Terms & conditions'}</div><div style={{ whiteSpace: 'pre-wrap' }}>{d.terms || d.notes}</div></>}
           </div>
           <table className="doc-sum"><tbody>
-            <tr><td>Basic total</td><td className="num">{inr(d.subTotal)}</td></tr>
+            <tr><td>Taxable amount</td><td className="num">{inr(d.subTotal)}</td></tr>
             {gstParts(d).map(([l, v]) => <tr key={l}><td>{l}</td><td className="num">{inr(v)}</td></tr>)}
             {!d.gstEnabled && <tr><td>GST</td><td className="num">Not applicable</td></tr>}
-            {d.discount > 0 && <tr><td>Discount</td><td className="num">− {inr(d.discount)}</td></tr>}
             <tr className="gt"><td>Grand total</td><td className="num">{inr(d.grandTotal)}</td></tr>
           </tbody></table>
         </div>

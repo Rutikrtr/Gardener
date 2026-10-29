@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { X } from 'lucide-react';
-import { api } from '../api';
+import { X, CheckCircle2, Circle } from 'lucide-react';
+import { api, dt } from '../api';
 
 // Load data from an API path; returns [data, reload, error]
 export function useApi(path, initial = null) {
@@ -70,9 +70,10 @@ export function FormModal({ title, fields, value, onClose, onSave }) {
 // text is selected on focus, and the parent always receives a number.
 export function Num({ value, onChange, max, min = 0, ...props }) {
   const [text, setText] = useState(value ? String(value) : '');
+  // Re-sync whenever the shown text and the real value differ (e.g. the parent capped the number)
   useEffect(() => {
     if ((parseFloat(text) || 0) !== (+value || 0)) setText(value ? String(value) : '');
-  }, [value]);
+  }, [value, text]);
   const change = e => {
     let t = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').replace(/^0+(?=\d)/, '');
     let n = parseFloat(t) || 0;
@@ -102,3 +103,12 @@ export function Toasts() {
 const LABELS = { quotation: 'Quotation stage', active: 'Work in progress', completed: 'Completed', 'on-hold': 'On hold' };
 export const Badge = ({ s }) => <span className={'badge b-' + s}>{LABELS[s] || s}</span>;
 export const Bar = ({ pct, warn }) => <div className={'bar' + (warn ? ' warn' : '')}><i style={{ width: Math.min(100, Math.max(0, pct || 0)) + '%' }} /></div>;
+
+// Received / pending toggle (TDS certificate, GST report, labour paid…)
+export function Tick({ on, date, onClick }) {
+  return (
+    <button className={'tick' + (on ? ' on' : '')} onClick={onClick} title={on ? `Received${date ? ' on ' + dt(date) : ''} — click to undo` : 'Click when received'}>
+      {on ? <CheckCircle2 size={16} /> : <Circle size={16} />}<span>{on ? 'Received' : 'Pending'}</span>
+    </button>
+  );
+}

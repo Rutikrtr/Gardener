@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 import { FileText, CheckCircle2, Receipt, Wallet, Flag, ArrowRight, Sprout, MapPin, User, Phone, Calendar } from 'lucide-react';
 import { Bar } from './ui';
-import { inr, dt } from '../api';
+import { inr, dt, Q_STATUS } from '../api';
 
 // Simple, plain-language summary of one project
 export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, go }) {
   const approved = quotes.filter(q => q.status === 'approved');
   const billed = sum?.billed || 0, quoted = sum?.quoted || 0, received = sum?.received || 0;
   const fullyBilled = quoted > 0 && billed >= quoted;
-  const fullyPaid = billed > 0 && received >= billed;
+  const net = sum?.billedNet ?? billed;
+  const fullyPaid = billed > 0 && received >= net;
 
   const pct = (a, b) => (b ? Math.min(100, Math.round(a / b * 100)) : 0);
   // Plain-language checklist: what is done, what is happening now, what is left
@@ -16,13 +17,13 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
     { icon: FileText, done: quotes.length > 0,
       text: quotes.length ? 'Quotation made' : 'Make a quotation' },
     { icon: CheckCircle2, done: approved.length > 0,
-      text: approved.length ? `Client approved the quotation (${approved[0].number})` : 'Waiting for client to approve the quotation' },
+      text: approved.length ? `Work order finalised (${approved[0].number})` : 'Waiting for customer to finalise a quotation (work order)' },
     { icon: Receipt, done: fullyBilled,
       text: fullyBilled ? 'All work billed' : bills.length ? 'Billing in progress' : 'Bill the work in stages',
       value: approved.length ? `${pct(billed, quoted)}% billed` : '' },
     { icon: Wallet, done: fullyBilled && fullyPaid,
       text: fullyBilled && fullyPaid ? 'Full payment received' : received ? 'Payment coming in' : 'Collect payment from client',
-      value: billed ? `${pct(received, billed)}% received` : '' },
+      value: billed ? `${pct(received, net)}% received` : '' },
     { icon: Flag, done: p.status === 'completed',
       text: p.status === 'completed' ? 'Project completed' : 'Mark project as completed' },
   ];
@@ -32,9 +33,9 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
   // What should the user do next?
   const next =
     !quotes.length ? { text: 'Start by making a quotation for this site.', btn: 'Create quotation', to: `/projects/${p._id}/quotation/new` }
-    : !approved.length ? { text: 'Quotation is ready. Once the client agrees, mark it Approved.', btn: 'Go to quotations', tab: 'Quotations' }
-    : !fullyBilled ? { text: `Approved quotation ${approved[0].number} — ${inr(sum?.toBill)} is still left to bill.`, btn: bills.length ? 'Create next stage bill' : 'Create first stage bill', to: `/projects/${p._id}/bill/new` }
-    : !fullyPaid ? { text: `All work is billed. ${inr(billed - received)} payment is still due from the client.`, btn: 'Add payment', tab: 'Payments' }
+    : !approved.length ? { text: 'Revise the quotation as the customer asks. When they agree, make it the Work Order.', btn: 'Go to quotations', tab: 'quotes' }
+    : !fullyBilled ? { text: `Work order ${approved[0].number} — ${inr(sum?.toBill)} is still left to bill.`, btn: bills.length ? 'Create next stage bill' : 'Create first stage bill', to: `/projects/${p._id}/bill/new` }
+    : !fullyPaid ? { text: `All work is billed. ${inr(net - received)} payment is still due from the customer.`, btn: 'Add payment', tab: 'payments' }
     : p.status !== 'completed' ? { text: 'Everything is billed and paid. You can mark this project completed.', btn: 'Edit project', tab: 'edit' }
     : { text: 'This project is complete. 🎉', btn: null };
 
@@ -42,7 +43,7 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
   const tot = ledger.reduce((s, l) => ({ quoted: s.quoted + l.quoted, billed: s.billed + l.billed, used: s.used + l.used, inHand: s.inHand + l.inHand }), { quoted: 0, billed: 0, used: 0, inHand: 0 });
 
   const activity = [
-    ...quotes.map(q => ({ date: q.date, icon: FileText, text: `Quotation ${q.number} · ${q.status}`, amt: q.grandTotal })),
+    ...quotes.map(q => ({ date: q.date, icon: FileText, text: `Quotation ${q.number} · ${Q_STATUS[q.status]}`, amt: q.grandTotal })),
     ...bills.map(b => ({ date: b.date, icon: Receipt, text: `Stage ${b.stage} bill ${b.number}`, amt: b.grandTotal })),
     ...pays.map(x => ({ date: x.date, icon: Wallet, text: `Payment received · ${x.mode}`, amt: x.amount, pos: true })),
     ...usage.map(u => ({ date: u.date, icon: Sprout, text: `Used ${u.qty} ${u.item?.unit || ''} ${u.item?.name || ''}${u.note ? ' · ' + u.note : ''}` })),
@@ -83,26 +84,27 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
         <div className="card">
           <h2>Money</h2>
           <div className="money">
-            <div><small>Quotation value</small><b>{inr(quoted)}</b></div>
+            <div><small>Work order value</small><b>{inr(quoted)}</b></div>
             <div><small>Billed so far</small><b>{inr(billed)}</b></div>
             <div><small>Received</small><b className="pos">{inr(received)}</b></div>
-            <div><small>Payment due</small><b className={billed - received > 0 ? 'neg' : ''}>{inr(billed - received)}</b></div>
+            <div><small>Payment due</small><b className={net - received > 0 ? 'neg' : ''}>{inr(net - received)}</b></div>
           </div>
           <div className="meter">
             <div className="row" style={{ justifyContent: 'space-between' }}><span>Work billed</span><small>{inr(billed)} of {inr(quoted)}</small></div>
-            <Bar pct={quoted ? billed / quoted * 100 : 0} />
+            <Bar pct={quoted ? billed / quoted * 100 : 0} warn={billed > quoted} />
           </div>
+          {billed > quoted && quoted > 0 && <small className="tag-extra">Billed {inr(billed - quoted)} more than the work order (extra work)</small>}
           <div className="meter">
-            <div className="row" style={{ justifyContent: 'space-between' }}><span>Payment collected</span><small>{inr(received)} of {inr(billed)}</small></div>
-            <Bar pct={billed ? received / billed * 100 : 0} />
+            <div className="row" style={{ justifyContent: 'space-between' }}><span>Payment collected</span><small>{inr(received)} of {inr(net)}{sum?.tds ? ` (after ${inr(sum.tds)} TDS)` : ''}</small></div>
+            <Bar pct={net ? received / net * 100 : 0} />
           </div>
         </div>
 
         <div className="card">
-          <div className="head" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>Profit <small style={{ display: 'inline' }}>· internal</small></h2><button onClick={() => go('Expenses & Profit')}>Details</button></div>
+          <div className="head" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>Profit <small style={{ display: 'inline' }}>· internal</small></h2><button onClick={() => go('pnl')}>Details</button></div>
           <div className="money" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
             <div><small>Revenue (excl. GST)</small><b>{inr(sum?.revenue)}</b></div>
-            <div><small>Plant + labour + other costs</small><b className="neg">{inr((sum?.materialCost || 0) + (sum?.expenses || 0))}</b></div>
+            <div><small>Plants + labour + other costs</small><b className="neg">{inr((sum?.materialCost || 0) + (sum?.labourCost || 0) + (sum?.expenses || 0))}</b></div>
           </div>
           <div className="meter">
             <div className="row" style={{ justifyContent: 'space-between' }}><b>Profit</b><b className={sum?.profit < 0 ? 'neg' : 'pos'}>{inr(sum?.profit)} · {sum?.margin || 0}%</b></div>
@@ -121,7 +123,7 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
 
       <div className="grid g2">
         <div className="card">
-          <div className="head" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>Plants & material</h2><button onClick={() => go('Plant Stock')}>Full stock</button></div>
+          <div className="head" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>Plants & material</h2><button onClick={() => go('stock')}>Full stock</button></div>
           {ledger.length ? (
             <>
               <div className="money" style={{ marginBottom: 14 }}>
