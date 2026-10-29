@@ -10,14 +10,24 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
   const fullyBilled = quoted > 0 && billed >= quoted;
   const fullyPaid = billed > 0 && received >= billed;
 
+  const pct = (a, b) => (b ? Math.min(100, Math.round(a / b * 100)) : 0);
+  // Plain-language checklist: what is done, what is happening now, what is left
   const steps = [
-    { label: 'Quotation', icon: FileText, done: quotes.length > 0, note: quotes.length ? `${quotes.length} made` : 'Not yet' },
-    { label: 'Approved', icon: CheckCircle2, done: approved.length > 0, note: approved.length ? approved[0].number : 'Waiting' },
-    { label: 'Billing', icon: Receipt, done: fullyBilled, active: bills.length > 0 && !fullyBilled, note: bills.length ? `${bills.length} stage bill${bills.length > 1 ? 's' : ''}` : 'Not started' },
-    { label: 'Payment', icon: Wallet, done: fullyPaid && fullyBilled, active: pays.length > 0 && !(fullyPaid && fullyBilled), note: billed ? `${Math.round(received / billed * 100)}% received` : '—' },
-    { label: 'Completed', icon: Flag, done: p.status === 'completed', note: p.status === 'completed' ? 'Done' : '' },
+    { icon: FileText, done: quotes.length > 0,
+      text: quotes.length ? 'Quotation made' : 'Make a quotation' },
+    { icon: CheckCircle2, done: approved.length > 0,
+      text: approved.length ? `Client approved the quotation (${approved[0].number})` : 'Waiting for client to approve the quotation' },
+    { icon: Receipt, done: fullyBilled,
+      text: fullyBilled ? 'All work billed' : bills.length ? 'Billing in progress' : 'Bill the work in stages',
+      value: approved.length ? `${pct(billed, quoted)}% billed` : '' },
+    { icon: Wallet, done: fullyBilled && fullyPaid,
+      text: fullyBilled && fullyPaid ? 'Full payment received' : received ? 'Payment coming in' : 'Collect payment from client',
+      value: billed ? `${pct(received, billed)}% received` : '' },
+    { icon: Flag, done: p.status === 'completed',
+      text: p.status === 'completed' ? 'Project completed' : 'Mark project as completed' },
   ];
   const current = steps.findIndex(s => !s.done);
+  const doneCount = steps.filter(s => s.done).length;
 
   // What should the user do next?
   const next =
@@ -41,13 +51,22 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
   return (
     <div className="grid fade">
       <div className="card">
-        <div className="stepper">
-          {steps.map((s, i) => (
-            <div key={s.label} className={'step' + (s.done ? ' done' : i === current ? ' now' : '')}>
-              <div className="dot"><s.icon size={16} /></div>
-              <b>{s.label}</b><small>{s.note}</small>
-            </div>
-          ))}
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+          <h2 style={{ margin: 0 }}>Project progress</h2>
+          <small><b style={{ color: 'var(--ink)' }}>{doneCount} of {steps.length}</b> steps done</small>
+        </div>
+        <Bar pct={doneCount / steps.length * 100} />
+        <div className="checklist">
+          {steps.map((s, i) => {
+            const state = s.done ? 'done' : i === current ? 'now' : 'todo';
+            return (
+              <div key={i} className={'check ' + state}>
+                <span className="mark">{s.done ? <CheckCircle2 size={18} /> : <s.icon size={16} />}</span>
+                <span className="grow">{s.text}{state === 'now' && <em>Now</em>}</span>
+                {s.value && <small>{s.value}</small>}
+              </div>
+            );
+          })}
         </div>
       </div>
 
