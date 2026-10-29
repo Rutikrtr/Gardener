@@ -48,11 +48,12 @@ export function FormModal({ title, fields, value, onClose, onSave }) {
             ) : f.type === 'textarea' ? (
               <textarea rows={3} value={v[f.k] ?? ''} onChange={e => set(f.k, e.target.value)} />
             ) : f.type === 'number' ? (
-              <Num value={v[f.k]} onChange={n => set(f.k, n)} required={f.required} />
+              <Num value={v[f.k]} onChange={n => set(f.k, n)} required={f.required} max={typeof f.max === 'function' ? f.max(v) : f.max} />
             ) : (
               <input type={f.type || 'text'} required={f.required} value={f.type === 'date' ? (v[f.k] || '').slice(0, 10) : v[f.k] ?? ''}
                 onChange={e => set(f.k, e.target.value)} />
             )}
+            {f.hint && f.hint(v) && <small>{f.hint(v)}</small>}
           </label>
         ))}
         {err && <div className="err full">{err}</div>}

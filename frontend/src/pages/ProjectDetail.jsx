@@ -55,7 +55,10 @@ export default function ProjectDetail() {
   };
   const billed = sum?.billed || 0;
   const paidByBill = b => pays.filter(x => x.bill?._id === b._id).reduce((s, x) => s + x.amount, 0);
-  const ledgerItems = ledger.map(l => ({ value: l.item._id, label: `${l.item.name} (in hand: ${l.inHand} ${l.item.unit})` }));
+  // Only billed items that still have stock in hand can be used on site
+  const inHand = ledger.filter(l => l.inHand > 0);
+  const ledgerItems = inHand.map(l => ({ value: l.item._id, label: `${l.item.name} — ${l.inHand} ${l.item.unit} in hand` }));
+  const stockOf = v => ledger.find(l => l.item._id === v.item);
 
   return (
     <>
@@ -123,8 +126,10 @@ export default function ProjectDetail() {
         <div className="grid">
           <div className="card">
             <div className="head"><div><h2 style={{ margin: 0 }}>Daily site usage</h2><small>Log how many plants / material were used each day</small></div>
-              <button className="primary" onClick={() => setModal('usage')} disabled={!ledger.length}><Plus size={15} /> Log usage</button></div>
-            {!ledger.length && <small>Add items to a stage bill first — usage is tracked against billed stock.</small>}
+              <button className="primary" onClick={() => setModal('usage')} disabled={!inHand.length}><Plus size={15} /> Log usage</button></div>
+            {!inHand.length && <div className="notice warn"><Info size={16} /> {ledger.some(l => l.billed > 0)
+              ? 'All billed plants and material are already used. Make the next stage bill to add more stock.'
+              : 'Nothing billed yet. Usage is tracked against billed stock, so make a stage bill first.'}</div>}
             <table><thead><tr><th>Date</th><th>Item</th><th className="num">Qty used</th><th>Note</th><th /></tr></thead>
               <tbody>{usage.map(u => <tr key={u._id}><td>{dt(u.date)}</td><td>{u.item?.name}</td><td className="num">{u.qty} {u.item?.unit}</td><td>{u.note}</td>
                 <td><button className="icon danger" onClick={() => del('/usage/' + u._id, 'Delete entry?')}><Trash2 size={15} /></button></td></tr>)}
@@ -168,11 +173,15 @@ export default function ProjectDetail() {
       {modal === 'usage' && <FormModal title="Log daily usage" onClose={() => setModal(null)} value={{ date: new Date().toISOString() }}
         fields={[
           { k: 'item', label: 'Plant / material', options: ledgerItems, required: true, full: true },
-          { k: 'qty', label: 'Quantity used', type: 'number', required: true },
+          { k: 'qty', label: 'Quantity used', type: 'number', required: true, max: v => stockOf(v)?.inHand ?? 0,
+            hint: v => stockOf(v) ? `Max ${stockOf(v).inHand} ${stockOf(v).item.unit} (billed ${stockOf(v).billed}, used ${stockOf(v).used})` : 'Pick an item first' },
           { k: 'date', label: 'Date', type: 'date' },
           { k: 'note', label: 'Note (area, stage…)', full: true },
         ]}
-        onSave={async v => { await api('/usage', { method: 'POST', body: { ...v, project: id } }); reloadAll(); }} />}
+        onSave={async v => {
+          if (!(v.qty > 0)) throw new Error('Enter a quantity more than 0');
+          await api('/usage', { method: 'POST', body: { ...v, project: id } }); reloadAll();
+        }} />}
     </>
   );
 }

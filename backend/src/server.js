@@ -8,7 +8,7 @@ import { connectDB } from './db.js';
 import { auth, clientOnly } from './middleware/auth.js';
 import { crud } from './routes/crud.js';
 import authRoutes from './routes/auth.js';
-import projectRoutes, { billOverLimit } from './routes/projects.js';
+import projectRoutes, { billOverLimit, usageOverLimit } from './routes/projects.js';
 import analyticsRoutes from './routes/analytics.js';
 import { User, Item, Client, Project, Quotation, Bill, Payment, Usage } from './models/index.js';
 
@@ -39,6 +39,19 @@ app.put('/api/bills/:id', biz, async (req, res, next) => {
 });
 app.use('/api/bills', biz, crud(Bill, { populate: { path: 'project', populate: 'client' }, sort: 'stage', filters: ['project'] }));
 app.use('/api/payments', biz, crud(Payment, { populate: 'bill', sort: '-date', filters: ['project', 'bill'] }));
+// Usage must stay within the stock in hand for that project
+app.post('/api/usage', biz, async (req, res, next) => {
+  const { project, item, qty } = req.body;
+  if (!(await Project.exists({ _id: project, owner: req.user.id }))) return res.status(404).json({ message: 'Project not found' });
+  const over = await usageOverLimit(project, item, qty);
+  over ? res.status(400).json({ message: over }) : next();
+});
+app.put('/api/usage/:id', biz, async (req, res, next) => {
+  const u = await Usage.findOne({ _id: req.params.id, owner: req.user.id });
+  if (!u) return next();
+  const over = await usageOverLimit(u.project, req.body.item || u.item, req.body.qty ?? u.qty, u._id);
+  over ? res.status(400).json({ message: over }) : next();
+});
 app.use('/api/usage', biz, crud(Usage, { populate: 'item', sort: '-date', filters: ['project', 'item'] }));
 app.use('/api/analytics', biz, analyticsRoutes);
 

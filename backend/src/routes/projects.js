@@ -67,6 +67,20 @@ export async function billOverLimit(pid, lines = [], excludeBill) {
   return null;
 }
 
+// Daily usage can't go over what is in hand (billed qty − already used). Returns error or null.
+export async function usageOverLimit(pid, itemId, qty, excludeUsage) {
+  const p = oid(pid), it = oid(itemId);
+  const [billed, used, item] = await Promise.all([
+    Bill.aggregate([{ $match: { project: p } }, { $unwind: '$lines' }, { $match: { 'lines.item': it } }, { $group: { _id: null, q: { $sum: '$lines.qty' } } }]),
+    Usage.aggregate([{ $match: { project: p, item: it, ...(excludeUsage ? { _id: { $ne: oid(excludeUsage) } } : {}) } }, { $group: { _id: null, q: { $sum: '$qty' } } }]),
+    Item.findById(it),
+  ]);
+  const inHand = (billed[0]?.q || 0) - (used[0]?.q || 0);
+  if (+qty <= 0) return 'Quantity must be more than 0';
+  if (+qty > inHand) return `${item?.name || 'Item'}: only ${Math.max(0, inHand)} ${item?.unit || ''} in hand (billed but not used yet). You entered ${qty}.`;
+  return null;
+}
+
 // How much of each item can still be billed (used by the bill editor)
 r.get('/:pid/billable', async (req, res) => {
   const { quoted, billed } = await quotedAndBilled(req.params.pid, req.query.excludeBill);
