@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ResponsiveContainer, BarChart, Bar as RBar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
-import { FolderKanban, FileText, Receipt, Wallet, AlertCircle } from 'lucide-react';
+import { FolderKanban, Receipt, Wallet, AlertCircle, TrendingUp } from 'lucide-react';
 import { useApi, Badge, Bar } from './ui';
 import { inr, dt } from '../api';
 
@@ -13,9 +13,9 @@ export default function Dashboard() {
   const collected = a.billed ? Math.round(a.received / a.billed * 100) : 0;
   const kpis = [
     ['Projects', a.projects, FolderKanban],
-    ['Approved quotations', inr(a.quotedApproved), FileText],
     ['Total billed', inr(a.billed), Receipt],
     ['Payment received', inr(a.received), Wallet],
+    ['Profit (internal)', <span className={a.profit < 0 ? 'neg' : 'pos'}>{inr(a.profit)} <small style={{ display: 'inline' }}>{a.margin}%</small></span>, TrendingUp],
   ];
   return (
     <>

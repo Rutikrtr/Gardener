@@ -99,5 +99,6 @@ export function Toasts() {
   return <div className="toasts">{list.map(t => <div key={t.id} className={'toast ' + t.type}>{t.type === 'ok' ? '✓' : '!'} {t.msg}</div>)}</div>;
 }
 
-export const Badge =({ s }) => <span className={'badge b-' + s}>{s}</span>;
+const LABELS = { quotation: 'Quotation stage', active: 'Work in progress', completed: 'Completed', 'on-hold': 'On hold' };
+export const Badge = ({ s }) => <span className={'badge b-' + s}>{LABELS[s] || s}</span>;
 export const Bar = ({ pct, warn }) => <div className={'bar' + (warn ? ' warn' : '')}><i style={{ width: Math.min(100, Math.max(0, pct || 0)) + '%' }} /></div>;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Plus, Printer, Pencil, Trash2, ArrowLeft, CheckCircle2, ArrowRight, Sparkles, Info, Loader2 } from 'lucide-react';
+import { Plus, Printer, Pencil, Trash2, ArrowLeft, CheckCircle2, ArrowRight, Sparkles, Info, Loader2, Lock, Eye } from 'lucide-react';
 import { useApi, FormModal, Badge, Bar, toast } from './ui';
 import { api, inr, dt } from '../api';
 import { projectFields } from './Projects';
@@ -15,7 +15,8 @@ function StatusPicker({ q, busy, onChange }) {
   );
 }
 
-const TABS = ['Overview', 'Quotations', 'Stage Bills', 'Payments', 'Daily Usage', 'Plant Stock'];
+const TABS = ['Overview', 'Quotations', 'Stage Bills', 'Payments', 'Daily Usage', 'Plant Stock', 'Expenses & Profit'];
+export const EXPENSE_TYPES = ['Labour', 'Transport', 'Plant purchase', 'Material purchase', 'Machinery / JCB', 'Water / tanker', 'Food & stay', 'Other'];
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -30,9 +31,10 @@ export default function ProjectDetail() {
   const [usage, reloadU] = useApi('/usage?project=' + id, []);
   const [ledger, reloadL] = useApi(`/projects/${id}/ledger`, []);
   const [daywise, reloadD] = useApi(`/projects/${id}/daywise`, []);
+  const [expenses, reloadE] = useApi('/expenses?project=' + id, []);
   const [clients] = useApi('/clients', []);
   const [modal, setModal] = useState(null);
-  const reloadAll = () => [reloadP, reloadSum, reloadQ, reloadB, reloadPay, reloadU, reloadL, reloadD].forEach(f => f());
+  const reloadAll = () => [reloadP, reloadSum, reloadQ, reloadB, reloadPay, reloadU, reloadL, reloadD, reloadE].forEach(f => f());
 
   if (!p) return <div className="empty">Loading…</div>;
   const del = async (path, msg) => {
@@ -45,8 +47,7 @@ export default function ProjectDetail() {
   const setQStatus = async (q, status) => {
     setBusy(q._id);
     try {
-      await api('/quotations/' + q._id, { method: 'PUT', body: { status } });
-      if (status === 'approved' && p.status === 'quotation') await api('/projects/' + id, { method: 'PUT', body: { status: 'active' } });
+      await api('/quotations/' + q._id, { method: 'PUT', body: { status } }); // project status updates automatically
       await new Promise(r => setTimeout(r, 700)); // short pause so the change feels deliberate
       reloadAll();
       toast(status === 'approved' ? `${q.number} approved — ready for stage billing` : `${q.number} marked ${status}`);
@@ -81,6 +82,44 @@ export default function ProjectDetail() {
 
       {tab === 'Overview' && <Overview p={p} sum={sum} quotes={quotes} bills={bills} pays={pays} usage={usage} ledger={ledger}
         go={t => (t === 'edit' ? setModal('project') : setTab(t))} />}
+
+      {tab === 'Expenses & Profit' && (
+        <div className="grid fade">
+          <div className="notice"><Lock size={16} /> Internal only — expenses and profit are never shown on quotations or bills.</div>
+          <div className="grid g4">
+            <div className="card kpi"><div className="label">Revenue <small style={{ display: 'inline' }}>(billed, excl. GST)</small></div><div className="val">{inr(sum?.revenue)}</div></div>
+            <div className="card kpi"><div className="label">Plant & material cost</div><div className="val">{inr(sum?.materialCost)}</div><small>Billed qty × purchase cost in Price List</small></div>
+            <div className="card kpi"><div className="label">Labour & other expenses</div><div className="val">{inr(sum?.expenses)}</div></div>
+            <div className={'card kpi dark'}><div className="label">Profit</div><div className="val" style={{ color: sum?.profit < 0 ? '#ff8a8a' : undefined }}>{inr(sum?.profit)}</div>
+              <small style={{ color: '#a9bba9' }}>{sum?.margin || 0}% margin</small></div>
+          </div>
+          <div className="grid g2">
+            <div className="card">
+              <div className="head"><h2 style={{ margin: 0 }}>Expenses</h2><button className="primary" onClick={() => setModal('expense')}><Plus size={15} /> Add expense</button></div>
+              <div className="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Paid to</th><th>Note</th><th className="num">Amount</th><th /></tr></thead>
+                <tbody>{expenses.map(x => <tr key={x._id}><td>{dt(x.date)}</td><td><span className="badge">{x.category}</span></td><td>{x.paidTo}</td><td>{x.note}</td>
+                  <td className="num neg">{inr(x.amount)}</td>
+                  <td><div className="row" style={{ flexWrap: 'nowrap', gap: 2 }}><button className="icon" onClick={() => setModal({ expense: x })}><Pencil size={15} /></button>
+                    <button className="icon danger" onClick={() => del('/expenses/' + x._id, 'Delete expense?')}><Trash2 size={15} /></button></div></td></tr>)}
+                  {!expenses.length && <tr><td colSpan={6} className="empty">No expenses yet. Add labour wages, transport, JCB, etc.</td></tr>}</tbody></table></div>
+            </div>
+            <div className="card">
+              <h2>Where the money goes</h2>
+              {[['Plant & material', sum?.materialCost || 0], ...(sum?.byCategory || []).map(c => [c._id, c.t])].map(([l, v]) => (
+                <div key={l} className="meter">
+                  <div className="row" style={{ justifyContent: 'space-between' }}><span>{l}</span><b>{inr(v)}</b></div>
+                  <Bar pct={sum?.revenue ? v / sum.revenue * 100 : 0} warn />
+                </div>
+              ))}
+              <div className="meter" style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+                <div className="row" style={{ justifyContent: 'space-between' }}><b>Profit</b><b className={sum?.profit < 0 ? 'neg' : 'pos'}>{inr(sum?.profit)}</b></div>
+                <Bar pct={sum?.revenue ? Math.max(0, sum.profit) / sum.revenue * 100 : 0} />
+              </div>
+              <small style={{ marginTop: 12 }}>Tip: set the purchase cost of each plant in the Price List so plant cost is calculated automatically.</small>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tab === 'Quotations' && (
         <div className="card fade">
@@ -170,7 +209,21 @@ export default function ProjectDetail() {
           { k: 'reference', label: 'Reference / Cheque no.', full: true },
         ]}
         onSave={async v => { await api('/payments', { method: 'POST', body: { ...v, project: id, bill: v.bill || undefined } }); reloadAll(); }} />}
-      {modal === 'usage' && <FormModal title="Log daily usage" onClose={() => setModal(null)} value={{ date: new Date().toISOString() }}
+      {(modal === 'expense' || modal?.expense) && <FormModal title={modal.expense ? 'Edit expense' : 'Add expense (internal)'} onClose={() => setModal(null)}
+        value={modal.expense || { date: new Date().toISOString(), category: 'Labour' }}
+        fields={[
+          { k: 'category', label: 'Type', options: EXPENSE_TYPES, required: true },
+          { k: 'amount', label: 'Amount (₹)', type: 'number', required: true },
+          { k: 'date', label: 'Date', type: 'date' },
+          { k: 'paidTo', label: 'Paid to (e.g. labour contractor)' },
+          { k: 'note', label: 'Note (e.g. 6 labourers × 2 days)', full: true },
+        ]}
+        onSave={async v => {
+          if (!(v.amount > 0)) throw new Error('Enter an amount more than 0');
+          await api(modal.expense ? '/expenses/' + modal.expense._id : '/expenses', { method: modal.expense ? 'PUT' : 'POST', body: { ...v, project: id } });
+          reloadAll();
+        }} />}
+      {modal === 'usage' &&<FormModal title="Log daily usage" onClose={() => setModal(null)} value={{ date: new Date().toISOString() }}
         fields={[
           { k: 'item', label: 'Plant / material', options: ledgerItems, required: true, full: true },
           { k: 'qty', label: 'Quantity used', type: 'number', required: true, max: v => stockOf(v)?.inHand ?? 0,
@@ -196,6 +249,7 @@ function DocTable({ rows, kind, pid, onDelete, extra }) {
             <td><b>{d.number}</b></td>{kind === 'bill' && <td>Stage {d.stage}</td>}<td>{dt(d.date)}</td><td>{d.title}</td>
             <td className="num"><b>{inr(d.grandTotal)}</b></td><td>{extra(d)}</td>
             <td><div className="row" style={{ flexWrap: 'nowrap', gap: 2 }}>
+              <a className="btn view-btn" href={`/print/${kind}/${d._id}`} target="_blank" title="View"><Eye size={15} /> View</a>
               <Link className="icon" to={`/projects/${pid}/${kind}/${d._id}`} title="Edit"><Pencil size={15} /></Link>
               <a className="icon" href={`/print/${kind}/${d._id}`} target="_blank" title="Print / PDF"><Printer size={15} /></a>
               <button className="icon danger" onClick={() => onDelete(d)}><Trash2 size={15} /></button>

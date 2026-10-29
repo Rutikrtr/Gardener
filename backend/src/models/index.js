@@ -106,6 +106,15 @@ const quotationSchema = new Schema({
   status: { type: String, enum: ['draft', 'sent', 'approved', 'rejected'], default: 'draft' },
 }, opts);
 quotationSchema.pre('save', function () { totals(this); });
+// Project status follows the quotation: approved -> active, no approved quotation -> back to quotation stage
+quotationSchema.post('save', async function (doc) {
+  const Project = mongoose.model('Project');
+  const p = await Project.findById(doc.project);
+  if (!p || ['completed', 'on-hold'].includes(p.status)) return;
+  const anyApproved = await mongoose.model('Quotation').exists({ project: doc.project, status: 'approved' });
+  const status = anyApproved ? 'active' : 'quotation';
+  if (p.status !== status) await Project.updateOne({ _id: p._id }, { status });
+});
 export const Quotation = model('Quotation', quotationSchema);
 
 // Step-wise (running) bill
@@ -121,6 +130,17 @@ export const Payment = model('Payment', new Schema({
   date: { type: Date, default: Date.now },
   mode: { type: String, default: 'Bank' },
   reference: String,
+}, opts));
+
+// Internal project expenses (labour, transport…) — never shown to the end client
+export const Expense = model('Expense', new Schema({
+  owner,
+  project: { type: Types.ObjectId, ref: 'Project', required: true, index: true },
+  date: { type: Date, default: Date.now },
+  category: { type: String, default: 'Labour' },
+  amount: { type: Number, required: true },
+  paidTo: String,
+  note: String,
 }, opts));
 
 // Daily site usage: "on 11th used 50 plants"

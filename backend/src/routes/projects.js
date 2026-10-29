@@ -1,9 +1,19 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
-import { Project, Quotation, Bill, Payment, Usage, Item, User } from '../models/index.js';
+import { Project, Quotation, Bill, Payment, Usage, Item, User, Expense } from '../models/index.js';
 
 const r = Router();
 const oid = s => new mongoose.Types.ObjectId(s);
+
+// Purchase cost of everything billed = billed qty × item purchase cost (Price List)
+export async function billedMaterialCost(match) {
+  const rows = await Bill.aggregate([
+    { $match: match }, { $unwind: '$lines' }, { $match: { 'lines.item': { $ne: null } } },
+    { $lookup: { from: 'items', localField: 'lines.item', foreignField: '_id', as: 'it' } },
+    { $group: { _id: null, t: { $sum: { $multiply: ['$lines.qty', { $ifNull: [{ $first: '$it.costPrice' }, 0] }] } } } },
+  ]);
+  return rows[0]?.t || 0;
+}
 
 // Every /:pid route must belong to the logged-in client account
 r.param('pid', async (req, res, next, pid) => {
@@ -145,12 +155,20 @@ r.get('/:pid/daywise', async (req, res) => {
 r.get('/:pid/summary', async (req, res) => {
   const pid = oid(req.params.pid);
   const sum = async (M, match, f) => (await M.aggregate([{ $match: match }, { $group: { _id: null, t: { $sum: f } } }]))[0]?.t || 0;
-  const [quoted, billed, received] = await Promise.all([
+  const [quoted, billed, received, revenue, expenses, byCategory, materialCost] = await Promise.all([
     sum(Quotation, { project: pid, status: 'approved' }, '$grandTotal'),
     sum(Bill, { project: pid }, '$grandTotal'),
     sum(Payment, { project: pid }, '$amount'),
+    sum(Bill, { project: pid }, '$subTotal'), // revenue excludes GST (GST is paid to government)
+    sum(Expense, { project: pid }, '$amount'),
+    Expense.aggregate([{ $match: { project: pid } }, { $group: { _id: '$category', t: { $sum: '$amount' } } }, { $sort: { t: -1 } }]),
+    billedMaterialCost({ project: pid }),
   ]);
-  res.json({ quoted, billed, received, outstanding: billed - received, toBill: Math.max(0, quoted - billed) });
+  const profit = revenue - materialCost - expenses;
+  res.json({
+    quoted, billed, received, outstanding: billed - received, toBill: Math.max(0, quoted - billed),
+    revenue, materialCost, expenses, byCategory, profit, margin: revenue ? Math.round(profit / revenue * 100) : 0,
+  });
 });
 
 export default r;

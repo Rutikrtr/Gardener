@@ -10,7 +10,7 @@ import { crud } from './routes/crud.js';
 import authRoutes from './routes/auth.js';
 import projectRoutes, { billOverLimit, usageOverLimit } from './routes/projects.js';
 import analyticsRoutes from './routes/analytics.js';
-import { User, Item, Client, Project, Quotation, Bill, Payment, Usage } from './models/index.js';
+import { User, Item, Client, Project, Quotation, Bill, Payment, Usage, Expense } from './models/index.js';
 
 const app = express();
 const origins = (process.env.CORS_ORIGIN || '*').split(',').map(s => s.trim());
@@ -53,6 +53,7 @@ app.put('/api/usage/:id', biz, async (req, res, next) => {
   over ? res.status(400).json({ message: over }) : next();
 });
 app.use('/api/usage', biz, crud(Usage, { populate: 'item', sort: '-date', filters: ['project', 'item'] }));
+app.use('/api/expenses', biz, crud(Expense, { sort: '-date', filters: ['project', 'category'] }));
 app.use('/api/analytics', biz, analyticsRoutes);
 
 app.use((err, _req, res, _next) => {

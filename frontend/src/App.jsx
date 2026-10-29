@@ -1,5 +1,6 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Sprout, Users, Building2, Settings as SettingsIcon, LogOut, Leaf } from 'lucide-react';
+import Bills from './pages/Bills';
+import { LayoutDashboard, FolderKanban, Receipt, Sprout, Users, Building2, Settings as SettingsIcon, LogOut, Leaf } from 'lucide-react';
 import { getUser, logout } from './api';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -55,6 +56,7 @@ export default function App() {
   const nav = [
     ['/', 'Dashboard', LayoutDashboard],
     ['/projects', 'Projects', FolderKanban],
+    ['/bills', 'Bills', Receipt],
     ['/items', 'Price List', Sprout],
     ['/clients', 'Clients', Users],
     ['/settings', 'Settings', SettingsIcon],
@@ -67,6 +69,7 @@ export default function App() {
         <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/projects/:pid/:kind/new" element={<DocEditor />} />
         <Route path="/projects/:pid/:kind/:id" element={<DocEditor />} />
+        <Route path="/bills" element={<Bills />} />
         <Route path="/items" element={<Items />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/settings" element={<Settings />} />

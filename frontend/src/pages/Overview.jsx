@@ -80,7 +80,16 @@ export default function Overview({ p, sum, quotes, bills, pays, usage, ledger, g
         </div>
 
         <div className="card">
-          <h2>Project details</h2>
+          <div className="head" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>Profit <small style={{ display: 'inline' }}>· internal</small></h2><button onClick={() => go('Expenses & Profit')}>Details</button></div>
+          <div className="money" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+            <div><small>Revenue (excl. GST)</small><b>{inr(sum?.revenue)}</b></div>
+            <div><small>Plant + labour + other costs</small><b className="neg">{inr((sum?.materialCost || 0) + (sum?.expenses || 0))}</b></div>
+          </div>
+          <div className="meter">
+            <div className="row" style={{ justifyContent: 'space-between' }}><b>Profit</b><b className={sum?.profit < 0 ? 'neg' : 'pos'}>{inr(sum?.profit)} · {sum?.margin || 0}%</b></div>
+            <Bar pct={sum?.revenue ? Math.max(0, sum.profit) / sum.revenue * 100 : 0} />
+          </div>
+          <h2 style={{ marginTop: 20 }}>Project details</h2>
           <div className="facts">
             <div><User size={15} /><span>Client</span><b>{p.client?.name || '—'}{p.client?.company ? ` (${p.client.company})` : ''}</b></div>
             {p.client?.phone && <div><Phone size={15} /><span>Phone</span><b>{p.client.phone}</b></div>}
