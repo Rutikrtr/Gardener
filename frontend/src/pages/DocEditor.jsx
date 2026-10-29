@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2, ArrowLeft, Save, Printer, Copy } from 'lucide-react';
 import { useApi } from './ui';
-import { api, inr, isoDate } from '../api';
+import { api, inr, isoDate, gstParts } from '../api';
 
 // Section headings follow the client's BOQ format
 const SECTIONS = ['A - SOIL SUPPLY', 'B - MANURE SUPPLY', 'C - TREES', 'D - PLANTS & SHRUBS', 'E - LAWN', 'F - IRRIGATION', 'G - SERVICES'];
@@ -15,11 +15,15 @@ export default function DocEditor() {
   const base = isBill ? '/bills' : '/quotations';
   const [items] = useApi('/items', []);
   const [ledger] = useApi(isBill ? `/projects/${pid}/ledger` : null, []);
-  const [doc, setDoc] = useState({ date: isoDate(), title: '', gstPercent: 18, discount: 0, lines: [blank()], terms: '', notes: '' });
+  const [doc, setDoc] = useState({ date: isoDate(), title: '', gstEnabled: true, gstType: 'cgst_sgst', gstPercent: 18, discount: 0, lines: [blank()], terms: '', notes: '' });
   const [err, setErr] = useState('');
 
   useEffect(() => {
     if (id) api(`${base}/${id}`).then(d => setDoc({ ...d, date: isoDate(d.date), project: d.project?._id }));
+    // New document: take GST defaults & terms from Settings
+    else api('/auth/settings').then(s => setDoc(d => ({
+      ...d, gstEnabled: s.gstEnabled ?? true, gstType: s.gstType || 'cgst_sgst', gstPercent: s.gstPercent ?? 18, terms: isBill ? '' : s.terms || '',
+    })));
   }, [id]);
 
   const set = (k, v) => setDoc(d => ({ ...d, [k]: v }));
@@ -39,7 +43,7 @@ export default function DocEditor() {
   };
 
   const sub = doc.lines.reduce((s, l) => s + (+l.qty || 0) * (+l.rate || 0), 0);
-  const gst = sub * (+doc.gstPercent || 0) / 100;
+  const gst = doc.gstEnabled ? sub * (+doc.gstPercent || 0) / 100 : 0;
   const total = sub + gst - (+doc.discount || 0);
 
   const save = async print => {
@@ -66,10 +70,21 @@ export default function DocEditor() {
       {err && <p className="err">{err}</p>}
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="form" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          <label style={{ gridColumn: 'span 2' }}>Title<input value={doc.title || ''} onChange={e => set('title', e.target.value)} placeholder={isBill ? 'e.g. Stage 1 – Soil & tree plantation' : 'e.g. Bill of quantities for softscape work'} /></label>
+        <div className="form" style={{ gridTemplateColumns: '2fr 1fr 1fr 1.4fr 0.8fr' }}>
+          <label>Title<input value={doc.title || ''} onChange={e => set('title', e.target.value)} placeholder={isBill ? 'e.g. Stage 1 – Soil & tree plantation' : 'e.g. Bill of quantities for softscape work'} /></label>
           <label>Date<input type="date" value={doc.date} onChange={e => set('date', e.target.value)} /></label>
-          <label>GST %<input type="number" value={doc.gstPercent} onChange={e => set('gstPercent', +e.target.value)} /></label>
+          <label>GST
+            <span className="row" style={{ height: 40 }}>
+              <span className={'switch' + (doc.gstEnabled ? ' on' : '')} onClick={() => set('gstEnabled', !doc.gstEnabled)}><i /></span>
+              <span>{doc.gstEnabled ? 'Enabled' : 'No GST'}</span>
+            </span>
+          </label>
+          <label>GST type
+            <select disabled={!doc.gstEnabled} value={doc.gstType} onChange={e => set('gstType', e.target.value)}>
+              <option value="cgst_sgst">CGST + SGST</option><option value="igst">IGST</option>
+            </select>
+          </label>
+          <label>Rate %<input type="number" step="any" disabled={!doc.gstEnabled} value={doc.gstPercent} onChange={e => set('gstPercent', +e.target.value)} /></label>
         </div>
       </div>
 
@@ -100,7 +115,7 @@ export default function DocEditor() {
           <button onClick={() => set('lines', [...doc.lines, { ...blank(), section: doc.lines.at(-1)?.section || '' }])}><Plus size={15} /> Add line</button>
           <div className="totals">
             <div><span>Basic total</span><b>{inr(sub)}</b></div>
-            <div><span>GST {doc.gstPercent}%</span><b>{inr(gst)}</b></div>
+            {gstParts({ ...doc, gstAmount: gst }).map(([l, v]) => <div key={l}><span>{l}</span><b>{inr(v)}</b></div>)}
             <div><span>Discount</span><input type="number" style={{ width: 120, textAlign: 'right' }} value={doc.discount} onChange={e => set('discount', +e.target.value)} /></div>
             <div className="gt"><span>Grand total</span><span>{inr(total)}</span></div>
           </div>

@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import bcrypt from 'bcryptjs';
 import { connectDB } from './db.js';
-import { auth } from './middleware/auth.js';
+import { auth, clientOnly } from './middleware/auth.js';
 import { crud } from './routes/crud.js';
 import authRoutes from './routes/auth.js';
 import projectRoutes from './routes/projects.js';
@@ -22,14 +22,16 @@ app.use(morgan('tiny'));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'smart-garden' }));
 app.use('/api/auth', authRoutes);
-app.use('/api/items', auth, crud(Item, { sort: 'name', filters: ['category'] }));
-app.use('/api/clients', auth, crud(Client, { sort: 'name' }));
-app.use('/api/projects', auth, projectRoutes, crud(Project, { populate: 'client', filters: ['status'] }));
-app.use('/api/quotations', auth, crud(Quotation, { populate: 'project', filters: ['project', 'status'] }));
-app.use('/api/bills', auth, crud(Bill, { populate: 'project', sort: 'stage', filters: ['project'] }));
-app.use('/api/payments', auth, crud(Payment, { populate: 'bill', sort: '-date', filters: ['project', 'bill'] }));
-app.use('/api/usage', auth, crud(Usage, { populate: 'item', sort: '-date', filters: ['project', 'item'] }));
-app.use('/api/analytics', auth, analyticsRoutes);
+// Business data: client accounts only, each sees only its own records
+const biz = [auth, clientOnly];
+app.use('/api/items', biz, crud(Item, { sort: 'name', filters: ['category'] }));
+app.use('/api/clients', biz, crud(Client, { sort: 'name' }));
+app.use('/api/projects', biz, projectRoutes, crud(Project, { populate: 'client', filters: ['status'] }));
+app.use('/api/quotations', biz, crud(Quotation, { populate: { path: 'project', populate: 'client' }, filters: ['project', 'status'] }));
+app.use('/api/bills', biz, crud(Bill, { populate: { path: 'project', populate: 'client' }, sort: 'stage', filters: ['project'] }));
+app.use('/api/payments', biz, crud(Payment, { populate: 'bill', sort: '-date', filters: ['project', 'bill'] }));
+app.use('/api/usage', biz, crud(Usage, { populate: 'item', sort: '-date', filters: ['project', 'item'] }));
+app.use('/api/analytics', biz, analyticsRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

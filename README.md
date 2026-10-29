@@ -10,7 +10,7 @@ smart-garden/
 
 ## How it works (per project)
 
-1. **Price List**: plants, trees, soil, manure, lawn, irrigation and services, with rates. `npm run seed` loads the items from the Joyville BOQ.
+1. **Price List**: plants, trees, soil, manure, lawn, irrigation and services, with rates. Every new client account starts with the items from the Joyville BOQ.
 2. **Project**: create one per client site.
 3. **Quotation**: a BOQ-style quotation (sections A–G, qty/unit/rate/amount/remark, GST). Mark it **Approved** when the client accepts.
 4. **Stage Bills**: Stage 1, 2, … running bills. *Fill pending from quotation* pre-fills whatever hasn't been billed yet.
@@ -19,13 +19,17 @@ smart-garden/
 7. **Plant Stock**: per item, Quoted → Billed → Used → **In hand** (billed but not yet used, carries over to the next stage) → Left to bill. There's also a date-wise movement log with a running balance.
 8. **Print / PDF**: each quotation and bill has a print view with the company letterhead.
 
-Roles: **superadmin** (creates users) and **user**. The superadmin is created automatically on first start from `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`.
+Roles:
+- **superadmin** (software owner): only sees **Client Accounts**. Creates client logins, sets the plan (name, amount, start and expiry), renews it and starts or stops the service. A stopped or expired account is logged out straight away.
+- **client account** (e.g. Shivsai): sees only its own data. **Settings** holds the company details printed on documents, GST on/off, CGST+SGST or IGST, the GST rate and default quotation terms. Each quotation and bill can still override the GST.
+
+The superadmin is created on first start from `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`.
 
 ## Local development
 
 ```bash
 cd backend && cp .env.example .env   # fill MONGO_URI + JWT_SECRET
-npm install && npm run seed && npm run dev
+npm install && npm run dev
 cd ../frontend && cp .env.example .env && npm install && npm run dev
 ```
 
@@ -42,7 +46,6 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt in
 sudo npm i -g pm2
 git clone https://github.com/Rutikrtr/Gardener.git && cd Gardener/backend
 npm ci --omit=dev && cp .env.example .env && nano .env   # set MONGO_URI, JWT_SECRET, CORS_ORIGIN
-npm run seed
 pm2 start src/server.js --name smart-garden-api && pm2 save && pm2 startup
 ```
 

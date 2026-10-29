@@ -2,16 +2,41 @@ import mongoose from 'mongoose';
 const { Schema, model, Types } = mongoose;
 const opts = { timestamps: true };
 
+// Every business record belongs to one client account (the logged-in user)
+const owner = { type: Types.ObjectId, ref: 'User', required: true, index: true };
+
+// superadmin = software owner (manages client accounts & plans)
+// user       = a client business (e.g. Shivsai Garden Developers) using the software
 export const User = model('User', new Schema({
   name: String,
   username: { type: String, unique: true, required: true, lowercase: true, trim: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['superadmin', 'user'], default: 'user' },
   active: { type: Boolean, default: true },
+  phone: String,
+  plan: {
+    name: { type: String, default: 'Annual' },
+    amount: { type: Number, default: 0 },
+    startDate: Date,
+    endDate: Date,
+  },
+  settings: {
+    companyName: String,
+    tagline: String,
+    address: String,
+    phone: String,
+    email: String,
+    gstin: String,
+    gstEnabled: { type: Boolean, default: true },
+    gstType: { type: String, enum: ['cgst_sgst', 'igst'], default: 'cgst_sgst' },
+    gstPercent: { type: Number, default: 18 },
+    terms: String,
+  },
 }, opts));
 
 // Price list / catalog: plants, trees, soil, manure, lawn, irrigation, services
 export const Item = model('Item', new Schema({
+  owner,
   name: { type: String, required: true },
   category: { type: String, default: 'Plant' },
   unit: { type: String, default: "No's" },
@@ -22,6 +47,7 @@ export const Item = model('Item', new Schema({
 }, opts));
 
 export const Client = model('Client', new Schema({
+  owner,
   name: { type: String, required: true },
   company: String,
   phone: String,
@@ -31,6 +57,7 @@ export const Client = model('Client', new Schema({
 }, opts));
 
 export const Project = model('Project', new Schema({
+  owner,
   name: { type: String, required: true },
   client: { type: Types.ObjectId, ref: 'Client' },
   site: String,
@@ -53,16 +80,19 @@ const line = new Schema({
 function totals(doc) {
   doc.lines.forEach(l => { l.amount = +((l.qty || 0) * (l.rate || 0)).toFixed(2); });
   doc.subTotal = doc.lines.reduce((s, l) => s + l.amount, 0);
-  doc.gstAmount = +(doc.subTotal * (doc.gstPercent || 0) / 100).toFixed(2);
+  doc.gstAmount = doc.gstEnabled ? +(doc.subTotal * (doc.gstPercent || 0) / 100).toFixed(2) : 0;
   doc.grandTotal = +(doc.subTotal + doc.gstAmount - (doc.discount || 0)).toFixed(2);
 }
 
 const docFields = {
+  owner,
   project: { type: Types.ObjectId, ref: 'Project', required: true },
   number: String,
   date: { type: Date, default: Date.now },
   title: String,
   lines: [line],
+  gstEnabled: { type: Boolean, default: true },
+  gstType: { type: String, enum: ['cgst_sgst', 'igst'], default: 'cgst_sgst' },
   gstPercent: { type: Number, default: 18 },
   discount: { type: Number, default: 0 },
   subTotal: Number, gstAmount: Number, grandTotal: Number,
@@ -83,6 +113,7 @@ billSchema.pre('save', function () { totals(this); });
 export const Bill = model('Bill', billSchema);
 
 export const Payment = model('Payment', new Schema({
+  owner,
   project: { type: Types.ObjectId, ref: 'Project', required: true },
   bill: { type: Types.ObjectId, ref: 'Bill' },
   amount: { type: Number, required: true },
@@ -93,6 +124,7 @@ export const Payment = model('Payment', new Schema({
 
 // Daily site usage: "on 11th used 50 plants"
 export const Usage = model('Usage', new Schema({
+  owner,
   project: { type: Types.ObjectId, ref: 'Project', required: true },
   item: { type: Types.ObjectId, ref: 'Item', required: true },
   qty: { type: Number, required: true },

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Leaf } from 'lucide-react';
-import { api, COMPANY } from '../api';
+import { api } from '../api';
 
 export default function Login() {
   const [f, setF] = useState({ username: '', password: '' });
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState(() => { const m = sessionStorage.getItem('sg_msg') || ''; sessionStorage.removeItem('sg_msg'); return m; });
   const [busy, setBusy] = useState(false);
   const submit = async e => {
     e.preventDefault(); setBusy(true); setErr('');
@@ -18,9 +18,9 @@ export default function Login() {
   return (
     <div className="login">
       <div className="art">
-        <div className="brand"><span className="logo"><Leaf size={18} /></span><div><b>Smart Garden</b><small>{COMPANY.name}</small></div></div>
+        <div className="brand"><span className="logo"><Leaf size={18} /></span><div><b>Smart Garden</b><small>Garden business software</small></div></div>
         <h1>Quotations, stage bills & plant stock — <em>all in one garden.</em></h1>
-        <small>{COMPANY.phone}</small>
+        <small>Smart Garden</small>
       </div>
       <div className="formside">
         <form onSubmit={submit}>

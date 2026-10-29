@@ -1,35 +1,39 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { Project, Quotation, Bill, Payment, Usage, Item, Client } from '../models/index.js';
 
 const r = Router();
 
-r.get('/', async (_req, res) => {
-  const total = async (M, match, f) => (await M.aggregate([{ $match: match }, { $group: { _id: null, t: { $sum: f } } }]))[0]?.t || 0;
+r.get('/', async (req, res) => {
+  const owner = new mongoose.Types.ObjectId(req.user.id);
+  const total = async (M, match, f) => (await M.aggregate([{ $match: { ...match, owner } }, { $group: { _id: null, t: { $sum: f } } }]))[0]?.t || 0;
   const since = new Date();
   since.setDate(1); since.setHours(0, 0, 0, 0); since.setMonth(since.getMonth() - 11);
   const monthly = (M, f) => M.aggregate([
-    { $match: { date: { $gte: since } } },
+    { $match: { owner, date: { $gte: since } } },
     { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$date' } }, t: { $sum: f } } },
   ]);
 
   const [projects, byStatus, clients, items, quotedApproved, quotations, billed, received, mBills, mPay, topItems, recentPayments, projectRows] = await Promise.all([
-    Project.countDocuments(),
-    Project.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
-    Client.countDocuments(),
-    Item.countDocuments(),
+    Project.countDocuments({ owner }),
+    Project.aggregate([{ $match: { owner } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
+    Client.countDocuments({ owner }),
+    Item.countDocuments({ owner }),
     total(Quotation, { status: 'approved' }, '$grandTotal'),
-    Quotation.aggregate([{ $group: { _id: '$status', n: { $sum: 1 }, t: { $sum: '$grandTotal' } } }]),
+    Quotation.aggregate([{ $match: { owner } }, { $group: { _id: '$status', n: { $sum: 1 }, t: { $sum: '$grandTotal' } } }]),
     total(Bill, {}, '$grandTotal'),
     total(Payment, {}, '$amount'),
     monthly(Bill, '$grandTotal'),
     monthly(Payment, '$amount'),
     Usage.aggregate([
+      { $match: { owner } },
       { $group: { _id: '$item', qty: { $sum: '$qty' } } }, { $sort: { qty: -1 } }, { $limit: 6 },
       { $lookup: { from: 'items', localField: '_id', foreignField: '_id', as: 'item' } }, { $unwind: '$item' },
       { $project: { name: '$item.name', unit: '$item.unit', qty: 1 } },
     ]),
-    Payment.find().populate('project', 'name').sort('-date').limit(6),
+    Payment.find({ owner }).populate('project', 'name').sort('-date').limit(6),
     Project.aggregate([
+      { $match: { owner } },
       { $lookup: { from: 'bills', localField: '_id', foreignField: 'project', as: 'b' } },
       { $lookup: { from: 'payments', localField: '_id', foreignField: 'project', as: 'p' } },
       { $lookup: { from: 'quotations', localField: '_id', foreignField: 'project', as: 'q' } },

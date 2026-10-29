@@ -1,25 +1,38 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
-import { Quotation, Bill, Payment, Usage, Item } from '../models/index.js';
+import { Project, Quotation, Bill, Payment, Usage, Item, User } from '../models/index.js';
 
 const r = Router();
 const oid = s => new mongoose.Types.ObjectId(s);
 
-async function nextNumber(Model, prefix) {
-  const n = await Model.countDocuments();
+// Every /:pid route must belong to the logged-in client account
+r.param('pid', async (req, res, next, pid) => {
+  if (!mongoose.isValidObjectId(pid) || !(await Project.exists({ _id: pid, owner: req.user.id }))) {
+    return res.status(404).json({ message: 'Project not found' });
+  }
+  next();
+});
+
+async function nextNumber(Model, owner, prefix) {
+  const n = await Model.countDocuments({ owner });
   return `${prefix}-${new Date().getFullYear()}-${String(n + 1).padStart(4, '0')}`;
 }
 
+// New documents take GST defaults from the account settings unless given
+async function newDoc(req, Model, prefix, extra = {}) {
+  const s = (await User.findById(req.user.id)).settings || {};
+  const defaults = { gstEnabled: s.gstEnabled ?? true, gstType: s.gstType || 'cgst_sgst', gstPercent: s.gstPercent ?? 18 };
+  if (Model === Quotation && s.terms) defaults.terms = s.terms;
+  const number = req.body.number || await nextNumber(Model, req.user.id, prefix);
+  return new Model({ ...defaults, ...extra, ...req.body, owner: req.user.id, project: req.params.pid, number }).save();
+}
+
 // Create quotation / bill with auto numbering (bill stage = next stage of the project)
-r.post('/:pid/quotations', async (req, res) => {
-  const number = req.body.number || await nextNumber(Quotation, 'QT');
-  res.json(await new Quotation({ ...req.body, project: req.params.pid, number }).save());
-});
+r.post('/:pid/quotations', async (req, res) => res.json(await newDoc(req, Quotation, 'QT')));
 
 r.post('/:pid/bills', async (req, res) => {
   const stage = (await Bill.countDocuments({ project: req.params.pid })) + 1;
-  const number = req.body.number || await nextNumber(Bill, 'INV');
-  res.json(await new Bill({ stage, ...req.body, project: req.params.pid, number }).save());
+  res.json(await newDoc(req, Bill, 'INV', { stage }));
 });
 
 // Material ledger per item:

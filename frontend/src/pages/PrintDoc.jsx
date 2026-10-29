@@ -1,14 +1,16 @@
 import { useParams } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { useApi } from './ui';
-import { inr, dt, COMPANY } from '../api';
+import { inr, dt, gstParts } from '../api';
 
 export default function PrintDoc() {
   const { kind, id } = useParams();
   const isBill = kind === 'bill';
   const [d] = useApi((isBill ? '/bills/' : '/quotations/') + id);
-  const [project] = useApi(d ? '/projects/' + (d.project?._id || d.project) : null);
-  if (!d) return <div className="empty">Loading…</div>;
+  const [s] = useApi('/auth/settings');
+  if (!d || !s) return <div className="empty">Loading…</div>;
+  const project = d.project;
+  const COMPANY = { name: s.companyName, tagline: s.tagline, address: s.address, phone: s.phone, email: s.email, gstin: s.gstin };
 
   // group lines by section, keeping order of first appearance
   const groups = [];
@@ -31,7 +33,8 @@ export default function PrintDoc() {
             <h1 style={{ color: 'var(--green)' }}>{COMPANY.name}</h1>
             <small style={{ fontStyle: 'italic' }}>{COMPANY.tagline}</small>
             <small>{COMPANY.address}</small>
-            <small>{COMPANY.phone} · {COMPANY.email}</small>
+            <small>{[COMPANY.phone, COMPANY.email].filter(Boolean).join(' · ')}</small>
+            {COMPANY.gstin && <small>GSTIN: <b>{COMPANY.gstin}</b></small>}
           </div>
           <div style={{ textAlign: 'right' }}>
             <h1 style={{ fontSize: 22 }}>{isBill ? `RUNNING BILL – STAGE ${d.stage}` : 'QUOTATION'}</h1>
@@ -55,7 +58,7 @@ export default function PrintDoc() {
               )),
             ])}
             <tr><td colSpan={5} className="num"><b>Basic Total Amount</b></td><td className="num"><b>{inr(d.subTotal)}</b></td><td /></tr>
-            <tr><td colSpan={5} className="num">GST {d.gstPercent}%</td><td className="num">{inr(d.gstAmount)}</td><td /></tr>
+            {gstParts(d).map(([l, v]) => <tr key={l}><td colSpan={5} className="num">{l}</td><td className="num">{inr(v)}</td><td /></tr>)}
             {d.discount > 0 && <tr><td colSpan={5} className="num">Discount</td><td className="num">− {inr(d.discount)}</td><td /></tr>}
             <tr><td colSpan={5} className="num"><b>Grand Total Amount</b></td><td className="num"><b>{inr(d.grandTotal)}</b></td><td /></tr>
           </tbody>

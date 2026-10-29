@@ -40,7 +40,7 @@ export default function Items() {
               <td><div className="row" style={{ flexWrap: 'nowrap', gap: 2 }}><button className="icon" onClick={() => setEdit(r)}><Pencil size={15} /></button>
                 <button className="icon danger" onClick={async () => { if (confirm('Delete item?')) { await api('/items/' + r._id, { method: 'DELETE' }); reload(); } }}><Trash2 size={15} /></button></div></td></tr>
           ))}
-            {!list.length && <tr><td colSpan={8} className="empty">No items. Run <code>npm run seed</code> in backend to load BOQ items.</td></tr>}</tbody>
+            {!list.length && <tr><td colSpan={8} className="empty">No items yet. Add your plants and materials with rates.</td></tr>}</tbody>
         </table></div>
       </div>
       {edit && <FormModal title={edit._id ? 'Edit item' : 'Add item'} fields={fields} value={edit} onClose={() => setEdit(null)}
