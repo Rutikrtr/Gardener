@@ -70,8 +70,17 @@ async function ensureSuperadmin() {
   console.log('Superadmin created:', username);
 }
 
+// Keep project status in line with quotations (fixes projects approved before auto-status existed)
+async function syncProjectStatus() {
+  const approved = await Quotation.distinct('project', { status: 'approved' });
+  const a = await Project.updateMany({ status: 'quotation', _id: { $in: approved } }, { status: 'active' });
+  const b = await Project.updateMany({ status: 'active', _id: { $nin: approved } }, { status: 'quotation' });
+  if (a.modifiedCount || b.modifiedCount) console.log(`Project status synced: ${a.modifiedCount} → active, ${b.modifiedCount} → quotation`);
+}
+
 const port = process.env.PORT || 5000;
 connectDB(process.env.MONGO_URI)
   .then(ensureSuperadmin)
+  .then(syncProjectStatus)
   .then(() => app.listen(port, () => console.log('Smart Garden API on :' + port)))
   .catch(e => { console.error(e); process.exit(1); });

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Bills from './pages/Bills';
 import { LayoutDashboard, FolderKanban, Receipt, Sprout, Users, Building2, Settings as SettingsIcon, LogOut, Leaf } from 'lucide-react';
@@ -16,6 +17,14 @@ import { Toasts } from './pages/ui';
 
 function Shell({ nav, children }) {
   const user = getUser();
+  const loc = useLocation();
+  // Show a divider under the sticky page header once the page is scrolled
+  useEffect(() => {
+    const on = () => document.querySelector('.main .head')?.classList.toggle('stuck', window.scrollY > 4);
+    on();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, [loc.pathname]);
   return (
     <div className="shell">
       <aside className="side">
@@ -31,7 +40,7 @@ function Shell({ nav, children }) {
           <button className="icon" title="Logout" onClick={logout}><LogOut size={16} /></button>
         </div>
       </aside>
-      <main className="main" key={useLocation().pathname}>{children}</main>
+      <main className="main" key={loc.pathname}>{children}</main>
       <Toasts />
     </div>
   );
